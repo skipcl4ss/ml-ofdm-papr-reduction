@@ -35,15 +35,13 @@ def generate_64qam_mapping():
 
 
 def mapping(bits, modulation_type):
-    modulated_signal = None
-    demapping_table = None
-
     if modulation_type == 'QPSK':
-        mapping_table = {(0, 0): 1 + 1j, (0, 1): 1 - 1j, (1, 1): -1 - 1j, (1, 0): -1 + 1j}
-        modulated_signal = np.array([mapping_table[tuple(b)] for b in bits])
-        norm_factor = np.sqrt(np.mean(np.abs(modulated_signal) ** 2))
-        modulated_signal /= norm_factor
-        demapping_table = {v / norm_factor: k for k, v in mapping_table.items()}
+        # Vectorized: no dict, direct calculation
+        b = bits.astype(np.int8)
+        i = 1 - 2 * b[:, 0]
+        q = 1 - 2 * b[:, 1]
+        s = (i + 1j * q) / np.sqrt(2.0)
+        return s.astype(np.complex64), None
 
     elif modulation_type == '16QAM':
         # ... (omitted for brevity, same as before) ...
@@ -71,50 +69,31 @@ def mapping(bits, modulation_type):
 # --- TONE RESERVATION FUNCTIONS ---
 
 
-def tone_reservation(x_time, c_time, max_iter=10, clip_ratio=2.0, step=0.5):
-    """
-    Iteratively reduces PAPR by subtracting scaled/shifted versions of p_kernel.
-    """
-    x_tr = x_time.copy()
+def tone_reservation(x_time, c_shifts, max_iter=10, clip_ratio=2.0, step=0.5):
+        """
+        x_time: shape (N,)
+        c_shifts: shape (N, N), row i = c_time rolled by i samples
+        """
+        x_tr = x_time.copy()
+        avg_pwr = np.mean(np.abs(x_tr) ** 2)
+        target_amp = np.sqrt(clip_ratio * avg_pwr)
 
-    # Target amplitude (clipping threshold)
-    # We calculate this based on the average power of the current symbol
-    avg_pwr = np.mean(np.abs(x_tr) ** 2)
-    target_amp = np.sqrt(clip_ratio * avg_pwr)  # Target is sqrt(PAPR_target * P_avg)
+        for _ in range(max_iter):
+            abs_x = np.abs(x_tr)
+            max_idx = int(np.argmax(abs_x))
+            max_val = abs_x[max_idx]
 
-    for _ in range(max_iter):
-        # Find the maximum peak
-        abs_x = np.abs(x_tr)
-        max_val = np.max(abs_x)
-        max_idx = np.argmax(abs_x)
+            if max_val <= target_amp:
+                break
 
-        if max_val <= target_amp:
-            break  # Target reached
+            phase = x_tr[max_idx] / max_val
+            excess = max_val - target_amp
+            alpha = step * excess * phase
 
-        # Calculate the complex scaling factor alpha
-        # We want to reduce the peak at max_idx down to target_amp
-        # The correction vector is: alpha * p_shifted
+            # Use precomputed shift instead of np.roll
+            x_tr -= alpha * c_shifts[max_idx]
 
-        current_peak_complex = x_tr[max_idx]
-
-        # How much to reduce? (Simple clipping approach)
-        excess = max_val - target_amp
-
-        # Phase of the peak
-        phase = current_peak_complex / max_val
-
-        # Scale factor: amount to remove * phase * step_size (mu)
-        mu = step  # Convergence step size (0 < mu <= 1)
-        alpha = mu * excess * phase
-
-        # Create shifted kernel: p[n - max_idx]
-        # Efficient circular shift
-        p_shifted = np.roll(c_time, max_idx)
-
-        # Subtract kernel from signal
-        x_tr = x_tr - (alpha * p_shifted)
-
-    return x_tr
+        return x_tr
 
 
 # --- MAIN EXECUTION ---
@@ -142,7 +121,8 @@ if __name__ == "__main__":
         raise RuntimeError("Please enter valid modulation type")
 
 
-    np.random.seed(42)  # Fix seed for reproducibility
+    # np.random.seed(42)  # Fix seed for reproducibility
+    rng = np.random.default_rng(42)  # faster than old API
     all_indices = np.arange(N)
 
 
@@ -160,6 +140,8 @@ if __name__ == "__main__":
     C[reserved_indices] = 1 + 0j
     c_time = np.fft.ifft(C)
     c_time = c_time / np.max(np.abs(c_time))
+# Precompute all N circular shifts of c_time once
+    c_shifts = np.vstack([np.roll(c_time, i) for i in range(N)]).astype(np.complex64)
 
     # Calculate payload bits (only for data indices)
     payloadBits_per_signal = len(data_indices) * mu
@@ -168,7 +150,8 @@ if __name__ == "__main__":
 #! until here it run without issues
     # todo see if it is possible to merge both loops
     for i in range(K_PAPR):
-        bits = np.random.binomial(n=1, p=0.5, size=payloadBits_per_signal)
+        # bits = np.random.binomial(n=1, p=0.5, size=payloadBits_per_signal)
+        bits = rng.integers(0, 2, size=payloadBits_per_signal, dtype=np.int8)
         bits_SP = bits.reshape((len(data_indices), mu))
 
         mapped_symbols, _ = mapping(bits_SP, modulation_type)
@@ -192,7 +175,9 @@ if __name__ == "__main__":
         for i in range(K_PAPR):
             #if i % 100 == 0: print(f"Processing symbol {i}...")
 
-            bits = np.random.binomial(n=1, p=0.5, size=payloadBits_per_signal)
+            # bits = np.random.binomial(n=1, p=0.5, size=payloadBits_per_signal)
+            # Line 188 and 217:
+            bits = rng.integers(0, 2, size=payloadBits_per_signal, dtype=np.int8)
             bits_SP = bits.reshape((len(data_indices), mu))
 
             mapped_symbols, _ = mapping(bits_SP, modulation_type)
@@ -208,7 +193,7 @@ if __name__ == "__main__":
             #     target_ratio = 10 ** (target_papr_db / 10)
             #
             #     # 1. Run Tone Reservation
-            #     OFDM_time_TR = tone_reservation(OFDM_time, c_time, iteration, target_ratio, steps)
+            #     OFDM_time_TR = tone_reservation(OFDM_time, c_shifts, iteration, target_ratio, steps)
             #
             #     # 2. Extract the Peak Cancelling Signal (c)
             #     # Since Output = Original + c, then c = Output - Original
@@ -256,7 +241,7 @@ if __name__ == "__main__":
             #     break  # Stop after plotting one symbol
 
             target_ratio = 10 ** (target_papr_db / 10)
-            OFDM_time_TR = tone_reservation(OFDM_time, c_time, iteration, target_ratio, steps)
+            OFDM_time_TR = tone_reservation(OFDM_time, c_shifts, iteration, target_ratio, steps)
 
             # calculating new PAPR after TR
             peak_pwr_tr = np.max(np.abs(OFDM_time_TR) ** 2)
@@ -304,7 +289,8 @@ if __name__ == "__main__":
         power_ratios = []
 
         for i in range(K_POWER_SIM):
-            bits = np.random.binomial(n=1, p=0.5, size=payloadBits_per_signal)
+            # bits = np.random.binomial(n=1, p=0.5, size=payloadBits_per_signal)
+            bits = rng.integers(0, 2, size=payloadBits_per_signal, dtype=np.int8)
             bits_SP = bits.reshape((len(data_indices), mu))
             mapped_symbols, _ = mapping(bits_SP, modulation_type)
 
@@ -315,7 +301,7 @@ if __name__ == "__main__":
             pwr_orig = np.mean(np.abs(OFDM_time) ** 2)
 
             # Apply TR
-            OFDM_time_TR = tone_reservation(OFDM_time, c_time, iterations, target_ratio_lin, fixed_step)
+            OFDM_time_TR = tone_reservation(OFDM_time, c_shifts, iterations, target_ratio_lin, fixed_step)
 
             pwr_tr = np.mean(np.abs(OFDM_time_TR) ** 2)
             power_ratios.append(pwr_tr / pwr_orig)
