@@ -1,7 +1,7 @@
-import sys
+# import sys
 import numpy as np
 from matplotlib import pyplot as plt
-from scipy.special import erfc
+# from scipy.special import erfc
 
 
 # --- Helper Functions ---
@@ -126,7 +126,7 @@ if __name__ == "__main__":
     CP = N // 4 # cyclic prefix
     tr_ratio_test = 1/32 # percentage of subcarriers to be used as PRT
     target_papr_db = 6 # target PAPR
-    K_PAPR = 50000 # number of symbols
+    K_PAPR = 5000 # number of symbols
     iterations = [5, 10, 15, 20, 30, 50] # number of iterations of Tone Reservation
     steps = 0.5 # step size
     L = 2 # oversampling factor
@@ -165,7 +165,8 @@ if __name__ == "__main__":
     payloadBits_per_signal = len(data_indices) * mu
     PAPR_original = []
     OFDM_freq_oversampled = np.zeros(N_oversampled, dtype=complex)
-
+#! until here it run without issues
+    # todo see if it is possible to merge both loops
     for i in range(K_PAPR):
         bits = np.random.binomial(n=1, p=0.5, size=payloadBits_per_signal)
         bits_SP = bits.reshape((len(data_indices), mu))
