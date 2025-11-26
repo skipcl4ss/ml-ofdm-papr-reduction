@@ -197,11 +197,15 @@ if __name__ == '__main__':
     papr_db = np.array(papr_vals)
     papr_range = np.linspace(0, np.max(papr_db), 200)
     ccdf = [np.mean(papr_db > x) for x in papr_range]
+    papr_lin = 10 ** (papr_range / 20) # # Copied from nour
+    ccdf_th = 1 - (1 - np.exp(-papr_lin**2)) ** N # # Copied from nour
 
     plt.figure()
-    plt.semilogy(papr_range, ccdf)
+    plt.semilogy(papr_range, ccdf, label='Simulated')
+    plt.semilogy(papr_range, ccdf_th, '--', label='Theory')
     plt.grid(True,which='both')
     plt.xlabel('PAPR (dB)')
     plt.ylabel('CCDF = Pr(PAPR > x)')
     plt.title('PAPR CCDF Curve')
+    plt.legend()
     plt.show()
