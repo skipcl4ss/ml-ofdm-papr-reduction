@@ -195,7 +195,7 @@ def soft_clip_time(tx_time, CR):
     clipped = np.where(mag <= A, tx_time, A * np.exp(1j * phase))
     return clipped
 
-def clip_and_filter_ofdm(freq_symbols, N, L=4, CR=1.2):
+def clip_and_filter_ofdm(freq_symbols, N, L=4, CR=2.23):
     """
     Steps:
       1) Create oversampled frequency vector by inserting zeros (L-1)*N in middle
@@ -387,15 +387,23 @@ def main():
 
     # ----------------- PAPR simulation with clipping/filtering -----------------
     calc_papr = input("\nDo you want to calculate PAPR and plot CCDF? (Enter 'Y' to continue and any other key to terminate): ").strip().lower()
-
+    # ... inside main() ...
     if calc_papr == 'y':
-        # user asked for PAPR: we'll compute original, clipped (no filter), clipped+filtered
-        L_values = [1, 2, 4]  # oversampling factors to compare (keeps earlier idea)
-        CR = 1.2  # chosen clipping ratio (soft clipping). Change if you want a different CR.
-        samples_per_L = 100000  # number of OFDM blocks per L (keeps runtime practical)
-        print(f"Calculating PAPR for {samples_per_L} OFDM blocks per L with CR={CR} ...")
+        L_values = [1, 2, 4]
+
+        # --- FIX 1: ADJUST CR ---
+        # A CR of 1.2 linear is ~1.6dB (Too low).
+        # Let's use 7 dB which is a standard practical value.
+        target_CR_dB = 7.0
+        CR = 10 ** (target_CR_dB / 20)
+
+        # --- FIX 2: REDUCE SAMPLES FOR SPEED ---
+        samples_per_L = 2000  # Reduced from 100,000 for standard testing
+
+        print(f"Calculating PAPR for {samples_per_L} blocks/L with CR={target_CR_dB}dB ({CR:.2f} linear)...")
 
         for L in L_values:
+            # ... rest of your loop ...
             print(f"  Simulating L={L} ... (this may take some time)")
             papr_orig = []
             papr_clipped = []
