@@ -1,4 +1,4 @@
-# ofdm_with_clipping_filtering.py
+# ofdm_with_clipping_filtering_fixed.py
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.special import erfc
@@ -66,7 +66,7 @@ class PSKModem:
 
 class QAMModem:
     def __init__(self, M):
-        if int(np.sqrt(M))**2 != M:
+        if int(np.sqrt(M)) ** 2 != M:
             raise ValueError("M must be a square number (4, 16, 64, ...)")
 
         self.M = M
@@ -122,7 +122,7 @@ class QAMModem:
 
 # ----------------- Channel and theory -----------------
 def AWGN(tx_signal, SNR_dB):
-    signal_power = np.mean(np.abs(tx_signal)**2)
+    signal_power = np.mean(np.abs(tx_signal) ** 2)
     SNR_linear = 10 ** (SNR_dB / 10)
     noise_power = signal_power / SNR_linear
     noise_std = np.sqrt(noise_power / 2)
@@ -138,24 +138,29 @@ def TBER(EbNo_dB, M):
         return 0.5 * erfc(np.sqrt(EbNo_lin))
     elif M == 8:
         k = 3
-        return (1/k) * erfc(np.sqrt(k * EbNo_lin) * np.sin(np.pi/M))
+        return (1 / k) * erfc(np.sqrt(k * EbNo_lin) * np.sin(np.pi / M))
     elif M == 16:
-        return (3/8) * erfc(np.sqrt(0.4 * EbNo_lin))
+        return (3 / 8) * erfc(np.sqrt(0.4 * EbNo_lin))
     elif M == 64:
-        return (7/24) * erfc(np.sqrt((1/7) * EbNo_lin))
+        return (7 / 24) * erfc(np.sqrt((1 / 7) * EbNo_lin))
     return 0.0
 
 # ----------------- Utility functions -----------------
 def PAPR_from_time(tx_time):
-    power = np.abs(tx_time)**2
+    power = np.abs(tx_time) ** 2
     peak = np.max(power)
     avg = np.mean(power)
     if avg == 0: return 0.0
     return 10 * np.log10(peak / avg)
 
 def theoretical_CCDF(N, papr_db_range):
+    """
+    Theoretical CCDF for OFDM PAPR (Rayleigh approximation for large N)
+    P(PAPR > threshold) = 1 - (1 - exp(-threshold))^N
+    where threshold is in linear scale
+    """
     gamma = 10 ** (papr_db_range / 10)
-    ccdf = 1 - (1 - np.exp(-gamma))**N
+    ccdf = 1 - (1 - np.exp(-gamma)) ** N
     return ccdf
 
 def plot_CCDF_compare(papr_dict, N, title_suffix=''):
@@ -169,7 +174,7 @@ def plot_CCDF_compare(papr_dict, N, title_suffix=''):
     all_data = np.concatenate(list(papr_dict.values()))
     x_theory = np.linspace(np.min(all_data), np.max(all_data) + 2, 200)
     y_theory = theoretical_CCDF(N, x_theory)
-    plt.semilogy(x_theory, y_theory, 'k--', linewidth=1.5, label='Theoretical (L=1)')
+    plt.semilogy(x_theory, y_theory, 'k--', linewidth=1.5, label='Theoretical (No oversampling)')
 
     plt.xlabel('PAPR Threshold [dB]')
     plt.ylabel('Pr(PAPR > PAPR0)')
@@ -188,7 +193,7 @@ def soft_clip_time(tx_time, CR):
       y(n) = x(n) if |x| <= A
              A * exp(j*angle(x)) if |x| > A
     """
-    rms = np.sqrt(np.mean(np.abs(tx_time)**2))
+    rms = np.sqrt(np.mean(np.abs(tx_time) ** 2))
     A = CR * rms
     mag = np.abs(tx_time)
     phase = np.angle(tx_time)
@@ -198,34 +203,40 @@ def soft_clip_time(tx_time, CR):
 def clip_and_filter_ofdm(freq_symbols, N, L=4, CR=1.2):
     """
     Steps:
-      1) Create oversampled frequency vector by inserting zeros (L-1)*N in middle
+      1) Create oversampled frequency vector by zero-padding (insert zeros in middle)
       2) IFFT -> oversampled time
       3) Soft clip in time domain using CR
-      4) FFT the clipped time -> keep only original subcarrier bins (i.e., set the inserted zeros bins to zero)
+      4) FFT the clipped time -> zero out the inserted bins (band-limiting filter)
       5) IFFT back to oversampled time (filtered signal)
     Returns:
       tuple(original_oversampled_time, clipped_time_no_filter, clipped_filtered_time)
     """
-    # build oversampled frequency vector (zero padding in middle)
+    # Zero-pad in the MIDDLE of frequency domain for proper oversampling
+    # For DC-centered: split at N//2, insert zeros, then concatenate
     mid = N // 2
     zeros = np.zeros((L - 1) * N, dtype=complex)
+    # Correct zero-padding: [DC to mid-1] + [zeros] + [mid to N-1]
     oversampled_freq = np.concatenate([freq_symbols[:mid], zeros, freq_symbols[mid:]])
-    # time domain oversampled signal (original)
-    tx_time_oversampled = np.fft.ifft(oversampled_freq)
-    # soft clipping (no filtering)
+
+    # Time domain oversampled signal (original, no clipping)
+    tx_time_oversampled = np.fft.ifft(oversampled_freq) * L  # Scale by L for proper power
+
+    # Soft clipping (no filtering yet)
     clipped_time = soft_clip_time(tx_time_oversampled, CR)
-    # freq domain of clipped signal
-    clipped_freq = np.fft.fft(clipped_time)
-    # zero out the inserted bins (i.e., perform low-pass / band-limiting)
-    # The original information lives in the positions we used earlier:
+
+    # Frequency domain of clipped signal
+    clipped_freq = np.fft.fft(clipped_time) / L  # Undo scaling
+
+    # Band-limiting filter: keep only original subcarrier positions
     kept_freq = np.zeros_like(clipped_freq)
     kept_freq[:mid] = clipped_freq[:mid]
     kept_freq[-mid:] = clipped_freq[-mid:]
     # IFFT to get clipped+filtered time signal
-    clipped_filtered_time = np.fft.ifft(kept_freq)
+    clipped_filtered_time = np.fft.ifft(kept_freq) * L  # Scale by L again
+
     return tx_time_oversampled, clipped_time, clipped_filtered_time
 
-# ----------------- Parameter input (kept interactive like original) -----------------
+# ----------------- Parameter input -----------------
 def param():
     print("Enter the OFDM Parameters")
 
@@ -239,7 +250,7 @@ def param():
 
     while True:
         mod_str = input("Enter the modulation type [BPSK, QPSK, 8PSK, 16QAM, 64QAM] (Default: QPSK): ") or "QPSK"
-        mod_dic = {"BPSK":2, "QPSK": 4, "8PSK": 8, "16QAM": 16, "64QAM": 64}
+        mod_dic = {"BPSK": 2, "QPSK": 4, "8PSK": 8, "16QAM": 16, "64QAM": 64}
         if mod_str.upper() in mod_dic:
             M = mod_dic[mod_str.upper()]
             bits_per_symbol = int(np.log2(M))
@@ -250,7 +261,7 @@ def param():
     while True:
         try:
             EbNo_start = int(input("Enter the start Eb/No (Default: 0): ") or "0")
-            EbNo_end = int(input("Enter the stop Eb/No (Default: 10): " )or "10")
+            EbNo_end = int(input("Enter the stop Eb/No (Default: 10): ") or "10")
             EbNo_step = float(input("Enter the Eb/No step: (Default: 1): ") or "1")
             break
         except ValueError:
@@ -267,7 +278,7 @@ def param():
         "subc": subc,
         "cp": cp,
         "M": M,
-        "EbNo_range": np.arange(EbNo_start, EbNo_end+EbNo_step, EbNo_step),
+        "EbNo_range": np.arange(EbNo_start, EbNo_end + EbNo_step, EbNo_step),
         "bits_per_symbol": bits_per_symbol,
         "num_symb": num_symb,
         "mod_str": mod_str.upper()
@@ -386,37 +397,44 @@ def main():
     plt.show()
 
     # ----------------- PAPR simulation with clipping/filtering -----------------
-    calc_papr = input("\nDo you want to calculate PAPR and plot CCDF? (Enter 'Y' to continue and any other key to terminate): ").strip().lower()
+    calc_papr = input(
+        "\nDo you want to calculate PAPR and plot CCDF? (Enter 'Y' to continue and any other key to terminate): ").strip().lower()
 
     if calc_papr == 'y':
-        # user asked for PAPR: we'll compute original, clipped (no filter), clipped+filtered
-        L_values = [1, 2, 4]  # oversampling factors to compare (keeps earlier idea)
-        CR = 1.2  # chosen clipping ratio (soft clipping). Change if you want a different CR.
-        samples_per_L = 100000  # number of OFDM blocks per L (keeps runtime practical)
+        L_values = [1, 2, 4]
+        CR = 1.2
+        samples_per_L = 10000  # Reduced for faster computation
         print(f"Calculating PAPR for {samples_per_L} OFDM blocks per L with CR={CR} ...")
 
         for L in L_values:
-            print(f"  Simulating L={L} ... (this may take some time)")
+            print(f"  Simulating L={L} ...")
             papr_orig = []
             papr_clipped = []
             papr_clipped_filtered = []
 
-            # To limit time, we generate random frequency-domain OFDM symbols repeatedly
             for _ in range(samples_per_L):
                 papr_bits = np.random.randint(0, 2, int(subc * bits_per_symbol))
-                papr_symbols = modem.modulate(papr_bits)  # length = subc (frequency bins)
+                papr_symbols = modem.modulate(papr_bits)
 
-                # Compute oversampled time and apply clipping+filtering pipeline
-                # Use function clip_and_filter_ofdm which returns the original oversampled time,
-                # the clipped time (no filtering) and the clipped+filtered time.
-                tx_time_os, clipped_time, clipped_filtered_time = clip_and_filter_ofdm(papr_symbols, subc, L=L, CR=CR)
+                if L == 1:
+                    # No oversampling case
+                    tx_time = np.fft.ifft(papr_symbols)
+                    papr_orig.append(PAPR_from_time(tx_time))
 
-                # calculate PAPR for each
-                papr_orig.append(PAPR_from_time(tx_time_os))
-                papr_clipped.append(PAPR_from_time(clipped_time))
-                papr_clipped_filtered.append(PAPR_from_time(clipped_filtered_time))
+                    clipped = soft_clip_time(tx_time, CR)
+                    papr_clipped.append(PAPR_from_time(clipped))
 
-            # store results and plot CCDF for this L
+                    # For L=1, filtering means zeroing out-of-band after clipping
+                    clipped_freq = np.fft.fft(clipped)
+                    filtered_time = np.fft.ifft(clipped_freq)  # In this case, same as clipped
+                    papr_clipped_filtered.append(PAPR_from_time(filtered_time))
+                else:
+                    tx_time_os, clipped_time, clipped_filtered_time = clip_and_filter_ofdm(papr_symbols, subc, L=L,
+                                                                                           CR=CR)
+                    papr_orig.append(PAPR_from_time(tx_time_os))
+                    papr_clipped.append(PAPR_from_time(clipped_time))
+                    papr_clipped_filtered.append(PAPR_from_time(clipped_filtered_time))
+
             papr_dict = {
                 'Original (no clipping)': np.array(papr_orig),
                 f'Clipped (CR={CR})': np.array(papr_clipped),
