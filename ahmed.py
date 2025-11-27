@@ -158,7 +158,12 @@ def theoretical_CCDF(N, papr_db_range):
     ccdf = 1 - (1 - np.exp(-gamma))**N
     return ccdf
 
-def plot_CCDF_compare(papr_dict, N, title_suffix=''):
+# ----------------- CCDF plotting (fixed theoretical N) -----------------
+def plot_CCDF_compare(papr_dict, N_samples, title_suffix=''):
+    """
+    papr_dict: dict(label -> array of PAPR [dB])
+    N_samples: number of independent time samples per OFDM block (usually L * subc)
+    """
     plt.figure(figsize=(10, 7))
     colors = cm.viridis(np.linspace(0, 0.9, len(papr_dict)))
     for idx, (label, data) in enumerate(papr_dict.items()):
@@ -168,12 +173,12 @@ def plot_CCDF_compare(papr_dict, N, title_suffix=''):
 
     all_data = np.concatenate(list(papr_dict.values()))
     x_theory = np.linspace(np.min(all_data), np.max(all_data) + 2, 200)
-    y_theory = theoretical_CCDF(N, x_theory)
-    plt.semilogy(x_theory, y_theory, 'k--', linewidth=1.5, label='Theoretical (L=1)')
+    y_theory = theoretical_CCDF(N_samples, x_theory)        # use N_samples (e.g., L*subc)
+    plt.semilogy(x_theory, y_theory, 'k--', linewidth=1.5, label=f'Theoretical (N={N_samples})')
 
     plt.xlabel('PAPR Threshold [dB]')
     plt.ylabel('Pr(PAPR > PAPR0)')
-    plt.title(f'PAPR CCDF Comparison {title_suffix} (N={N})')
+    plt.title(f'PAPR CCDF Comparison {title_suffix} (N_samples={N_samples})')
     plt.grid(True, which='both', linestyle='--', alpha=0.7)
     plt.ylim(1e-4, 1)
     plt.legend()
@@ -195,34 +200,41 @@ def soft_clip_time(tx_time, CR):
     clipped = np.where(mag <= A, tx_time, A * np.exp(1j * phase))
     return clipped
 
+# ----------------- Clipping & Filtering (fixed) -----------------
 def clip_and_filter_ofdm(freq_symbols, N, L=4, CR=1.2):
     """
-    Steps:
-      1) Create oversampled frequency vector by inserting zeros (L-1)*N in middle
-      2) IFFT -> oversampled time
-      3) Soft clip in time domain using CR
-      4) FFT the clipped time -> keep only original subcarrier bins (i.e., set the inserted zeros bins to zero)
-      5) IFFT back to oversampled time (filtered signal)
+    Fixed oversampling / filtering pipeline:
+      - build frequency vector of length L*N by inserting zeros in the middle
+      - use explicit n=L*N for FFT/IFFT operations
+      - perform soft clipping in time domain, then transform back and keep only the original bins
     Returns:
-      tuple(original_oversampled_time, clipped_time_no_filter, clipped_filtered_time)
+      (tx_time_oversampled, clipped_time_no_filter, clipped_filtered_time)
     """
-    # build oversampled frequency vector (zero padding in middle)
+    Ns = L * N
     mid = N // 2
-    zeros = np.zeros((L - 1) * N, dtype=complex)
+    zeros = np.zeros((L - 1) * N, dtype=complex)  # (L-1)*N zeros to reach length L*N
+
+    # build oversampled frequency vector (zero padding in the middle)
     oversampled_freq = np.concatenate([freq_symbols[:mid], zeros, freq_symbols[mid:]])
+    assert len(oversampled_freq) == Ns
+
     # time domain oversampled signal (original)
-    tx_time_oversampled = np.fft.ifft(oversampled_freq)
+    tx_time_oversampled = np.fft.ifft(oversampled_freq, n=Ns)
+
     # soft clipping (no filtering)
     clipped_time = soft_clip_time(tx_time_oversampled, CR)
-    # freq domain of clipped signal
-    clipped_freq = np.fft.fft(clipped_time)
-    # zero out the inserted bins (i.e., perform low-pass / band-limiting)
-    # The original information lives in the positions we used earlier:
+
+    # freq domain of clipped signal (explicit length)
+    clipped_freq = np.fft.fft(clipped_time, n=Ns)
+
+    # keep only the original subcarrier bins (same positions as oversampled_freq)
     kept_freq = np.zeros_like(clipped_freq)
     kept_freq[:mid] = clipped_freq[:mid]
     kept_freq[-mid:] = clipped_freq[-mid:]
-    # IFFT to get clipped+filtered time signal
-    clipped_filtered_time = np.fft.ifft(kept_freq)
+
+    # IFFT to get clipped+filtered time signal (explicit length)
+    clipped_filtered_time = np.fft.ifft(kept_freq, n=Ns)
+
     return tx_time_oversampled, clipped_time, clipped_filtered_time
 
 # ----------------- Parameter input (kept interactive like original) -----------------
@@ -416,13 +428,14 @@ def main():
                 papr_clipped.append(PAPR_from_time(clipped_time))
                 papr_clipped_filtered.append(PAPR_from_time(clipped_filtered_time))
 
-            # store results and plot CCDF for this L
+            # inside the L loop, after computing papr_orig etc.
+            N_samples = L * subc
             papr_dict = {
                 'Original (no clipping)': np.array(papr_orig),
                 f'Clipped (CR={CR})': np.array(papr_clipped),
                 f'Clipped + Filtered (CR={CR})': np.array(papr_clipped_filtered),
             }
-            plot_CCDF_compare(papr_dict, subc, title_suffix=f' (L={L})')
+            plot_CCDF_compare(papr_dict, N_samples, title_suffix=f' (L={L})')
 
         print("PAPR simulation done.")
     else:
