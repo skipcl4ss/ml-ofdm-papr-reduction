@@ -398,7 +398,7 @@ def main():
         CR = 10 ** (target_CR_dB / 20)
 
         # --- FIX 2: REDUCE SAMPLES FOR SPEED ---
-        samples_per_L = 2000  # Reduced from 100,000 for standard testing
+        samples_per_L = 100000
 
         print(f"Calculating PAPR for {samples_per_L} blocks/L with CR={target_CR_dB}dB ({CR:.2f} linear)...")
 
