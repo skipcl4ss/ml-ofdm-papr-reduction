@@ -121,6 +121,7 @@ class QAMModem:
         return all_bits.flatten()
 
 # ----------------- Channel and theory -----------------
+# ! takes a transmitted signal, applies noise, and outputs a recieved signal
 def AWGN(tx_signal, SNR_dB):
     signal_power = np.mean(np.abs(tx_signal)**2)
     SNR_linear = 10 ** (SNR_dB / 10)
@@ -129,6 +130,7 @@ def AWGN(tx_signal, SNR_dB):
     noise = noise_std * (np.random.randn(len(tx_signal)) + 1j * np.random.randn(len(tx_signal)))
     return tx_signal + noise
 
+# ! calculates theoretical BER at each Eb/No given the modulation type
 def TBER(EbNo_dB, M):
     EbNo_lin = 10 ** (EbNo_dB / 10)
 
@@ -146,6 +148,7 @@ def TBER(EbNo_dB, M):
     return 0.0
 
 # ----------------- Utility functions -----------------
+# ! calculates papr
 def PAPR_from_time(tx_time):
     power = np.abs(tx_time)**2
     peak = np.max(power)
@@ -192,7 +195,7 @@ def soft_clip_time(tx_time, CR):
     A = CR * rms
     mag = np.abs(tx_time)
     phase = np.angle(tx_time)
-    clipped = np.where(mag <= A, tx_time, A * np.exp(1j * phase))
+    clipped = np.where(mag <= A, tx_time, A * np.exp(1j * phase)) # ? why
     return clipped
 
 def clip_and_filter_ofdm(freq_symbols, N, L=4, CR=2.23):
@@ -226,9 +229,10 @@ def clip_and_filter_ofdm(freq_symbols, N, L=4, CR=2.23):
     return tx_time_oversampled, clipped_time, clipped_filtered_time
 
 # ----------------- Parameter input (kept interactive like original) -----------------
+# # takes input from users
 def param():
     print("Enter the OFDM Parameters")
-
+    # This block asks the user for as integer as the number of subcarriers, then calculates the cyclic prefix from it
     while True:
         try:
             subc = int(input("Enter the number of subcarriers (Default: 64): ") or "64")
@@ -236,17 +240,17 @@ def param():
             break
         except ValueError:
             print("Kindly enter a valid number.")
-
+    # This block asks for the modulation type and calculates the bits per symbol accordingly
     while True:
         mod_str = input("Enter the modulation type [BPSK, QPSK, 8PSK, 16QAM, 64QAM] (Default: QPSK): ") or "QPSK"
-        mod_dic = {"BPSK":2, "QPSK": 4, "8PSK": 8, "16QAM": 16, "64QAM": 64}
+        mod_dic = {"BPSK": 2, "QPSK": 4, "8PSK": 8, "16QAM": 16, "64QAM": 64}
         if mod_str.upper() in mod_dic:
             M = mod_dic[mod_str.upper()]
             bits_per_symbol = int(np.log2(M))
             break
         else:
             print("Kindly enter a valid modulation type.")
-
+    # This block asls for EbNo start and end as integers, and its step as a float
     while True:
         try:
             EbNo_start = int(input("Enter the start Eb/No (Default: 0): ") or "0")
@@ -255,14 +259,14 @@ def param():
             break
         except ValueError:
             print("Kindly enter a valid number.")
-
+    # This block asks for the number of symbols as an integer
     while True:
         try:
             num_symb = int(input("Enter number of OFDM symbols (Default: 1000): ") or "1000")
             break
         except ValueError:
             print("Kindly enter a valid number")
-
+    # Save all the results in a dictionary and return it as the function output
     parameters = {
         "subc": subc,
         "cp": cp,
