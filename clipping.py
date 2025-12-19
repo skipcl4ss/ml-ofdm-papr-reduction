@@ -5,14 +5,19 @@ from scipy.signal import firwin, lfilter  # Import FIR filter design (firwin) an
 # ----------------------------------------------------
 # Parameters
 # ----------------------------------------------------
-N = 2560 # Set the number of OFDM subcarriers (size of the FFT)
-M = 16  # Set the QAM modulation order (e.g., 16-QAM)
-L = 4  # Set the Oversampling factor (OFDM size is multiplied by L in time domain)
-N_iter = 5  # Set the number of clipping-filter iterations (for iterative C&F)
-CR = 1.5  # Set the Clipping Ratio (threshold factor: A = CR * sqrt(P_avg))
-num_symbols = 10000  # Set the number of OFDM frames/symbols to simulate for CCDF statistics
+# N = 512
+N = 128
+# M = 16  # Set the QAM modulation order (e.g., 16-QAM)
+M = 4
+num_symbols = 100
+# L = 4  # Set the Oversampling factor (OFDM size is multiplied by L in time domain)
+L = 8
+# N_iter = 5  # Set the number of clipping-filter iterations (for iterative C&F)
+# CR = 0.7  # Set the Clipping Ratio (threshold factor: A = CR * sigma)
+CR = [0.8, 1.0, 1.2, 1.4, 1.6]
 # ! decrease num_symbols for faster simulation
-filter_order = 64  # Set the order (length minus 1) of the FIR low-pass filter (LPF)
+# filter_order = 64  # Set the order (length minus 1) of the FIR low-pass filter (LPF)
+filter_order = 104
 
 
 # ----------------------------------------------------
@@ -21,7 +26,8 @@ filter_order = 64  # Set the order (length minus 1) of the FIR low-pass filter (
 def qam_mod(bits):  # Define function to map input bits to complex QAM symbols
     m = int(np.log2(M))  # Calculate number of bits per symbol (e.g., 4 for 16-QAM)
     gray = bits.reshape(-1, m)  # Reshape the flat bit stream into groups of 'm' bits ! its shape is (10240 / 4, 4) = (2560, 4)
-    k = gray[:, 0] * 8 + gray[:, 1] * 4 + gray[:, 2] * 2 + gray[:, 3] * 1  # Simple conversion to decimal index (Assumes 4 bits, but not strict Gray)
+    # k = gray[:, 0] * 8 + gray[:, 1] * 4 + gray[:, 2] * 2 + gray[:, 3] * 1  # Simple conversion to decimal index (Assumes 4 bits, but not strict Gray)
+    k = gray[:, -2] * 2 + gray[:, -1] * 1
     # ! it shape would be (2560, 1)
     r = 2 * ((k % 4) - 1.5)  # Calculate the Real (In-phase) component value based on index
     i = 2 * ((k // 4) - 1.5)  # Calculate the Imaginary (Quadrature) component value based on index
@@ -34,7 +40,7 @@ def qam_mod(bits):  # Define function to map input bits to complex QAM symbols
 # ----------------------------------------------------
 def ofdm_mod(symbols):  # Define function for OFDM modulation (IFFT with oversampling)
     # ! its length is 2560 + (4 - 1)*2560 = 10240
-    symbols_oversampled = np.concatenate([symbols, np.zeros((L - 1) * N)])  # Zero-pad the symbols in frequency domain for oversampling
+    symbols_oversampled = np.concatenate([symbols, np.zeros((L - 1) * N, dtype=complex)])  # Zero-pad the symbols in frequency domain for oversampling
     return np.fft.ifft(symbols_oversampled)  # Perform Inverse Fast Fourier Transform (IFFT) to get time domain signal
 
 
@@ -44,9 +50,10 @@ def ofdm_mod(symbols):  # Define function for OFDM modulation (IFFT with oversam
 def clip_signal(x, CR):  # Define function to perform hard clipping on the time-domain signal
     # ! cr = a / sigma
     A = CR * np.sqrt(np.mean(np.abs(x) ** 2))  # Calculate the clipping amplitude threshold A based on CR and average power
+    # A = CR * np.sqrt(N / 2)
     eps = 1e-12  # Define a small epsilon to prevent division by zero in the next step
     # ! np.where(condition, T, F)
-    return np.where(np.abs(x) > A, A * x / (np.abs(x) + eps), x)  # Clip samples: if |x|>A, set magnitude to A, keeping the phase
+    return np.where(np.abs(x) > A, A * x / (np.abs(x) + eps), x)  # Clip samples: if |x| > A, set magnitude to A, keeping the phase
 
 
 # ----------------------------------------------------
@@ -84,7 +91,8 @@ def ccdf(values):  # Define function to calculate the Complementary Cumulative D
 h = make_filter()  # Design and store the filter impulse response
 
 papr_original = []  # Initialize list to store PAPR values of the original (unclipped) signal
-papr_iters = [[] for _ in range(N_iter)]  # Initialize a nested list to store PAPR values for each iteration of C&F ! 5 nested lists
+papr_unfiltered = {cr: [] for cr in CR}
+papr_iters = {cr: [] for cr in CR}  # Initialize a nested list to store PAPR values for each iteration of C&F ! 5 nested lists
 
 for _ in range(num_symbols):  # Start the simulation loop over the specified number of OFDM symbols ! 10k iterations
     bits = np.random.randint(0, 2, N * int(np.log2(M)))  # Generate a block of random bits for one OFDM symbol ! binary array of length 2560*4 = 10240
@@ -93,75 +101,109 @@ for _ in range(num_symbols):  # Start the simulation loop over the specified num
 
     papr_original.append(papr(s))  # Calculate and store the PAPR of the original signal
 
-    x = s.copy()  # Create a copy of the original signal for the iterative process
+    for cr in CR:
+        x_cr = clip_signal(s.copy(), cr)
+        papr_unfiltered[cr].append(papr(x_cr))
 
-    for k in range(N_iter):  # Start the loop for iterative Clipping and Filtering ! 5 iterations
-        # CLIPPING
-        x = clip_signal(x, CR)  # Apply the hard clipping function
-
-        # FILTERING
-        x = filter_signal(x, h)  # Apply the LPF to suppress out-of-band noise caused by clipping
-
-        # Save iteration PAPR
-        papr_iters[k].append(papr(x))  # Calculate and store the PAPR after this iteration of C&F
+        x_filt = filter_signal(x_cr, h)
+        papr_iters[cr].append(papr(x_filt))
 
 # ----------------------------------------------------
 # Compute PAPR statistics vs iterations
 # ----------------------------------------------------
-mean_papr = []  # Initialize list for mean PAPR after each iteration
-median_papr = []  # Initialize list for median PAPR after each iteration
-max_papr = []  # Initialize list for max PAPR after each iteration
+orig_mean = np.mean(papr_original)
+orig_median = np.median(papr_original)
+orig_max = np.max(papr_original)
 
-for k in range(N_iter):  # Loop through the results of all iterations
-    mean_papr.append(np.mean(papr_iters[k]))  # Calculate the mean of PAPR values for iteration k
-    median_papr.append(np.median(papr_iters[k]))  # Calculate the median of PAPR values for iteration k
-    max_papr.append(np.max(papr_iters[k]))  # Calculate the maximum of PAPR values for iteration k
+print("Original Mean PAPR (dB): ", orig_mean)
+print("Original Median PAPR (dB): ", orig_median)
+print("Original Max PAPR (dB): ", orig_max)
 
-# Also compute original
-orig_mean = np.mean(papr_original)  # Calculate the mean PAPR of the original signal
-orig_median = np.median(papr_original)  # Calculate the median PAPR of the original signal
-orig_max = np.max(papr_original)  # Calculate the maximum PAPR of the original signal
+# mean_papr_unfiltered = np.mean(papr_unfiltered)
+# median_papr_unfiltered = np.median(papr_unfiltered)
+# max_papr_unfiltered = np.max(papr_unfiltered)
+#
+# print("Mean PAPR after one iteration (dB) (Clipping only): ", mean_papr_unfiltered)
+# print("Median PAPR after one iteration (dB) (Clipping only): ", median_papr_unfiltered)
+# print("Max PAPR after one iteration (dB) (Clipping only): ", max_papr_unfiltered)
+#
+# mean_papr = np.mean(papr_iters)
+# median_papr = np.median(papr_iters)
+# max_papr = np.max(papr_iters)
+#
+# print("Mean PAPR after one iteration (dB): ", mean_papr)
+# print("Median PAPR after one iteration (dB): ", median_papr)
+# print("Max PAPR after one iteration (dB): ", max_papr)
 
-# ----------------------------------------------------
-# Plot PAPR statistics vs iterations
-# ----------------------------------------------------
-iterations = np.arange(N_iter + 1)  # Create x-axis values for the plot (1 to N_iter)
+for cr in CR:
+    arr_unf = np.array(papr_unfiltered[cr])
+    arr_filt = np.array(papr_iters[cr])
 
-plt.figure(figsize=(10, 6))  # Create a new plot figure with a specific size
-plt.plot(iterations, [orig_mean] + mean_papr, 'o-', label="Mean PAPR")  # Plot the mean PAPR reduction over iterations
-plt.plot(iterations, [orig_median] + median_papr, 's-', label="Median PAPR")  # Plot the median PAPR reduction over iterations
-plt.plot(iterations, [orig_max] + max_papr, 'd-', label="Max PAPR")  # Plot the max PAPR reduction over iterations
+    if arr_unf.size:
+        print(f"CR={cr}  (Clipping only)  Mean: {np.mean(arr_unf):.4f}  Median: {np.median(arr_unf):.4f}  Max: {np.max(arr_unf):.4f}")
+    else:
+        print(f"CR={cr}  (Clipping only)  No samples")
 
-# Add original value as horizontal baseline
-plt.axhline(orig_mean, color='gray', linestyle='--',
-            label="Original Mean")  # Draw horizontal line for original mean PAPR
-plt.axhline(orig_median, color='gray', linestyle='-.',
-            label="Original Median")  # Draw horizontal line for original median PAPR
-plt.axhline(orig_max, color='gray', linestyle=':', label="Original Max")  # Draw horizontal line for original max PAPR
+    if arr_filt.size:
+        print(f"CR={cr}  (Clipped+Filtered)  Mean: {np.mean(arr_filt):.4f}  Median: {np.median(arr_filt):.4f}  Max: {np.max(arr_filt):.4f}")
+    else:
+        print(f"CR={cr}  (Clipped+Filtered)  No samples")
 
-plt.xlabel("Iteration Number")  # Set the x-axis label
-plt.ylabel("PAPR (dB)")  # Set the y-axis label
-plt.title("PAPR Statistics vs Clipping–Filtering Iterations")  # Set the plot title
-plt.grid(True)  # Enable grid lines on the plot
-plt.legend()  # Display the legend
-plt.show()  # Display the first plot (PAPR statistics)
+# # ----------------------------------------------------
+# # Plot PAPR statistics vs iterations
+# # ----------------------------------------------------
+# # iterations = np.arange(2)  # Create x-axis values for the plot (1 to N_iter)
+# iterations = np.arange(3)  # Create x-axis values for the plot (1 to N_iter)
+#
+# plt.figure(figsize=(10, 6))  # Create a new plot figure with a specific size
+# # plt.plot(iterations, [orig_mean, mean_papr], 'o-', label="Mean PAPR")
+# # plt.plot(iterations, [orig_median, median_papr], 's-', label="Median PAPR")
+# # plt.plot(iterations, [orig_max, max_papr], 'd-', label="Max PAPR")
+# plt.plot(iterations, [orig_mean, mean_papr_unfiltered, mean_papr], 'o-', label="Mean PAPR")
+# plt.plot(iterations, [orig_median, median_papr_unfiltered, median_papr], 's-', label="Median PAPR")
+# plt.plot(iterations, [orig_max, max_papr_unfiltered, max_papr], 'd-', label="Max PAPR")
+#
+# # Add original value as horizontal baseline
+# plt.axhline(orig_mean, color='gray', linestyle='--',
+#             label="Original Mean")  # Draw horizontal line for original mean PAPR
+# plt.axhline(orig_median, color='gray', linestyle='-.',
+#             label="Original Median")  # Draw horizontal line for original median PAPR
+# plt.axhline(orig_max, color='gray', linestyle=':', label="Original Max")  # Draw horizontal line for original max PAPR
+#
+# plt.xlabel("Iteration Number")  # Set the x-axis label
+# plt.ylabel("PAPR (dB)")  # Set the y-axis label
+# plt.title("PAPR Statistics vs Clipping–Filtering Iterations")  # Set the plot title
+# plt.grid(True)  # Enable grid lines on the plot
+# plt.legend()  # Display the legend
+# plt.show()  # Display the first plot (PAPR statistics)
 
 # Plot CCDF curves
 # ----------------------------------------------------
-plt.figure(figsize=(10, 6))  # Create a second plot figure
+plt.figure(figsize=(10, 7))  # Create a second plot figure
 
 # Original CCDF
 papr_o, ccdf_o = ccdf(papr_original)  # Calculate the CCDF for the original signal
-plt.semilogy(papr_o, ccdf_o, label="Original")  # Plot the original CCDF on a semi-log scale
+plt.semilogy(papr_o, ccdf_o, label="Original", color='black', linewidth=2)  # Plot the original CCDF on a semi-log scale
 
-# Each iteration CCDF
-for k in range(N_iter):  # Loop through all C&F iterations
-    pi, ci = ccdf(papr_iters[k])  # Calculate the CCDF for the result of iteration k
-    plt.semilogy(pi, ci, label=f"Iteration {k + 1}")  # Plot the CCDF for the current iteration
+colors = plt.cm.viridis(np.linspace(0, 1, len(CR)))
+
+for cidx, cr in enumerate(CR):
+    unf = np.array(papr_unfiltered[cr])
+    filt = np.array(papr_iters[cr])
+
+    if unf.size:
+        p_nofilter, c_nofilter = ccdf(unf)
+        plt.semilogy(p_nofilter, c_nofilter, label=f"Clipped (CR={cr})", color=colors[cidx], linestyle='--')
+
+    if filt.size:
+        p_filt, c_filt = ccdf(filt)
+        plt.semilogy(p_filt, c_filt, label=f"Clipped+Filtered (CR={cr})", color=colors[cidx], linestyle='-')
 
 plt.grid(True, which='both')  # Enable grid lines
 plt.xlabel("PAPR (dB)")  # Set the x-axis label
 plt.ylabel("CCDF")  # Set the y-axis label
-plt.title("PAPR CCDF – Multi-Iteration Clipping & Filtering")  # Set the plot title
+# plt.xlim(0, 13)
+plt.ylim((10 ** -2, 10 ** 0))
+plt.title("PAPR CCDF – Multi-CR Clipping & Filtering (`clipping.py`)")  # Set the plot title
 plt.legend()  # Display the legend
 plt.show()  # Display the second plot (CCDF curves)

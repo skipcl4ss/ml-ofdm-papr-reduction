@@ -1,20 +1,11 @@
 import sys
-
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy.special import erfc
 
 def addCP(OFDM_time):
-    CP = OFDM_time[-cp:]               # take the last cp samples ...
-    return np.hstack([CP, OFDM_time])  # ... and add them to the beginning
-
-def gray_code(n):
-    """Generate n-bit Gray codes as a list of tuples."""
-    if n == 0:
-        return [()]
-    first_half = gray_code(n-1)
-    second_half = first_half[::-1]
-    return [(0,) + code for code in first_half] + [(1,) + code for code in second_half]
+    cp = OFDM_time[-CP:]               # take the last CP samples ...
+    return np.hstack([cp, OFDM_time])  # ... and add them to the beginning
 
 def mapping(bits, modulation_type):
     if  modulation_type == '16QAM':
@@ -57,7 +48,7 @@ def channel(signal, SNRdb):
     return signal + noise
 
 def removeCP(signal):
-    return signal[cp:(cp+N)]
+    return signal[CP:(CP+N)]
 
 def Demapping(QAM, demapping_table):
     # array of possible constellation points
@@ -103,14 +94,14 @@ if __name__ == "__main__":
         sys.exit()
 
     # Simulation Parameters
-    N = 512  # number of OFDM subcarriers
-    cp = N // 4  # length of the cyclic prefix
+    N = 256  # number of OFDM subcarriers
+    CP = N // 4  # length of the cyclic prefix
     dataCarriers = np.arange(N)
     payloadBits_per_signal = len(dataCarriers) * mu
 
     # --- PHASE 1: PAPR Simulation (No Channel/Noise) ---
     # We use a high number of symbols here to get a smooth CCDF curve
-    K_PAPR = 1000
+    K_PAPR =100000
     PAPR_values = []
 
     print(f"Simulating PAPR with {K_PAPR} symbols...")
@@ -148,7 +139,7 @@ if __name__ == "__main__":
     CCDF = [np.mean(PAPR_dB > t) for t in PAPR_dB_range]
 
     # --- PHASE 2: BER Simulation (With Channel/Noise) ---
-    K_BER = 1000  # Number of OFDM frames for BER (Increase for smoother BER curves)
+    K_BER = 100  # Number of OFDM frames for BER (Increase for smoother BER curves)
     SNR_dB = np.arange(SNR_min, SNR_max, SNR_step)
 
     plot_snr_values = [-10, 0, 10]
@@ -200,12 +191,10 @@ if __name__ == "__main__":
     plt.figure()
     plt.semilogy(PAPR_dB_range, CCDF, 'b-', lw=2, label='Simulated CCDF')
     plt.semilogy(PAPR_dB_range, CCDF_theoretical, 'r--', label='Theoretical CCDF')
-    plt.xlim((2, 13))
-    plt.ylim((10 ** -4, 10 ** 0))
-    plt.grid(True, which='both')
+    plt.grid(True, which='both', alpha=0.5)
     plt.xlabel('PAPR (dB)')
     plt.ylabel('Pr(PAPR > PAPR0)')
-    plt.title(f'CCDF of PAPR for {modulation_type} (N={N}) (shorter.py)')
+    plt.title(f'CCDF of PAPR for {modulation_type} (N={N})')
     plt.legend()
 
     # 2. BER Plot

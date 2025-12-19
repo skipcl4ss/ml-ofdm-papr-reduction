@@ -96,21 +96,44 @@ for i = 1:N_SNR
     end
 end
 
-subplot(221), semilogy(z,CCDF_no), grid on, hold on
+% Plot 1: CCDF
+figure(1)
+semilogy(z,CCDF_no,'b-'), grid on, hold on
+legend_entries = {'No clipping'};
 for cr = 1:N_CR
     gs = gss(cr);
-    subplot(221)
     semilogy(z, CCDF_c(cr,:), [gs '-'], z, CCDF_cf(cr,:), [gs ':'])
-    hold on
-    subplot(222)
+    legend_entries{end+1} = sprintf('Clipped CR=%.1f', CRs(cr));
+    legend_entries{end+1} = sprintf('Clipped+Filtered CR=%.1f', CRs(cr));
+end
+legend(legend_entries, 'Location', 'best')
+xlabel('PAPR [dB]')
+ylabel('CCDF')
+title('CCDF of PAPR')
+hold off
+
+% Plot 2: BER
+figure(2)
+legend_entries2 = {};
+for cr = 1:N_CR
+    gs = gss(cr);
     semilogy(SNRdBs, ber_c(cr,:), [gs '-'], SNRdBs, ber_cf(cr,:), [gs ':'])
     hold on
+    legend_entries2{end+1} = sprintf('Clipped CR=%.1f', CRs(cr));
+    legend_entries2{end+1} = sprintf('Clipped+Filtered CR=%.1f', CRs(cr));
 end
-subplot(222)
 semilogy(SNRdBs,ber_no,'o', SNRdBs,ber_analytic,'k')
+ylim([10 ^ -4, 10 ^ 0])
 grid on
+legend_entries2{end+1} = 'No clipping (simulated)';
+legend_entries2{end+1} = 'Theoretical';
+legend(legend_entries2, 'Location', 'best')
+xlabel('SNR [dB]')
+ylabel('BER')
+title('BER vs SNR')
+hold off
 
 function y=zero_pasting(x)
 % Paste zeros at the center half of the input sequence x
 N=length(x); M=ceil(N/4); y = [x(1:M) zeros(1,N/2) x(N-M+1:N)];
-end
+end 

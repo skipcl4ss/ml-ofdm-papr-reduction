@@ -475,7 +475,9 @@ def ahmed():
     if calc_papr == 'y':
         L_values = [1, 2, 4]
 
-        target_CR_dB = 7.0
+        # target_CR_dB = 7.0
+        target_CR_dB = 4.0
+        # target_CR_dB = 40 * np.log10(2)
         CR = 10 ** (target_CR_dB / 20)
 
         samples_per_L = 100000
@@ -696,6 +698,6 @@ def shorter():
     plt.show()
 
 if __name__ == "__main__":
-    # clipping()
-    ahmed()
+    clipping()
+    # ahmed()
     # shorter()

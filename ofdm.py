@@ -139,10 +139,10 @@ def ber_theory_mqam(ebno_db, M):
 if __name__ == '__main__':
 
     # User parameters
-    N = 64
+    N = 512
     cp_len = 16
     M = 16  # set M=2 for BPSK
-    num_blocks = 300
+    num_blocks = 100000
 
     k = int(np.log2(M))
     total_symbols = N*num_blocks
@@ -203,9 +203,11 @@ if __name__ == '__main__':
     plt.figure()
     plt.semilogy(papr_range, ccdf, label='Simulated')
     plt.semilogy(papr_range, ccdf_th, '--', label='Theory')
+    # plt.xlim((2, 13))
+    plt.ylim((10 ** -6, 10 ** 0))
     plt.grid(True,which='both')
     plt.xlabel('PAPR (dB)')
     plt.ylabel('CCDF = Pr(PAPR > x)')
-    plt.title('PAPR CCDF Curve')
+    plt.title('PAPR CCDF Curve (ofdm.py)')
     plt.legend()
     plt.show()

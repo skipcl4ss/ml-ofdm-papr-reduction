@@ -52,7 +52,7 @@ if __name__ == "__main__":
     N = 1000 # number of OFDM signals
     SNR_max = 20 # SNR range in dB (-SNR_max to SNR_max)
     SNR_step = 2
-    K = 64  # number of OFDM subcarriers
+    K = 512  # number of OFDM subcarriers
     CP = K // 4  # length of the cyclic prefix: 25% of the block
     dataCarriers = np.arange(K)  # index of all subcarriers ([0, 1, ... K-1])
     payloadBits_per_OFDM = len(dataCarriers) * mu  # number of payload bits per OFDM symbol
@@ -173,10 +173,12 @@ if __name__ == "__main__":
     plt.figure()
     plt.semilogy(PAPR_dB_range, CCDF, 'b-', lw = 2, label='CCDF')
     plt.semilogy(PAPR_dB_range, CCDF_theoretical, 'r--', label='CCDF_theoretical')
+    plt.xlim((2, 13))
+    plt.ylim((10 ** -4, 10 ** 0))
     plt.grid(True, which='both')
     plt.xlabel('PAPR (dB)')
     plt.ylabel('CCDF')
-    plt.title('CCDF of PAPR for OFDM')
+    plt.title('CCDF of PAPR for OFDM (testnour.py)')
     plt.legend()
     plt.show()
 
