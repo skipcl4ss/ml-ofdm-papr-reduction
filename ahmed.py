@@ -301,7 +301,7 @@ def main():
         "bits_per_symbol": 2,
         # ! changeable
         "EbNo_range": np.arange(0, 11, 1), # does not affect ccdf
-        "num_symb": int(input("Enter number of OFDM symbols (Default: 100): ") or "100")
+        "num_symb": int(input("Enter number of OFDM symbols (Default: 100000): ") or "100000")
     }
     subc = p["subc"]
     cp = p["cp"]
@@ -453,9 +453,9 @@ def main():
         cr_db_list = [20 * np.log10(c) for c in CR_list]
         # --- FIX 2: REDUCE SAMPLES FOR SPEED ---
         # samples_per_L = 1024
-        samples_per_L = 100000
         # print(f"Calculating PAPR for {samples_per_L} blocks/L with CR={20 * np.log10(CR)}dB ({CR:.2f} linear)...")
-        print(f"Calculating PAPR for {samples_per_L} blocks/L with CRs (dB) = {cr_db_list} and linear = {CR_list}")
+        # print(f"Calculating PAPR for {samples_per_L} blocks/L with CRs (dB) = {cr_db_list} and linear = {CR_list}")
+        print(f"Calculating PAPR for {num_symb} blocks/L with CRs (dB) = {cr_db_list} and linear = {CR_list}")
 
         for L in L_values:
             print(f"  Simulating L={L} ...")
@@ -468,7 +468,8 @@ def main():
 
 
             # To limit time, we generate random frequency-domain OFDM symbols repeatedly
-            for _ in range(samples_per_L):
+            # for _ in range(samples_per_L):
+            for _ in range(num_symb):
                 papr_bits = np.random.randint(0, 2, int(subc * bits_per_symbol))
                 papr_symbols = modem.modulate(papr_bits)  # length = subc (frequency bins)
 
