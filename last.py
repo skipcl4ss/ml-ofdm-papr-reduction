@@ -1,6 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
+import time
+
+start = time.time()
 
 # --- Parameters (Section 9.1) ---
 N = 1024            # Number of Subcarriers
@@ -104,3 +107,6 @@ plt.grid(True, which="both", ls="-", alpha=0.3)
 plt.legend(loc='lower left')
 plt.tight_layout()
 plt.show()
+
+end = time.time()
+print(f"\nTotal execution time: {end - start:.2f} seconds")

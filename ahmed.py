@@ -3,6 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.special import erfc
 import matplotlib.cm as cm
+import time
+
+start = time.time()
 
 # ----------------- Modems (PSK and QAM) -----------------
 class PSKModem:
@@ -519,3 +522,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+end = time.time()
+print(f"\nTotal execution time: {end - start:.2f} seconds")
