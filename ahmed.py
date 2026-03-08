@@ -6,6 +6,8 @@ import matplotlib.cm as cm
 import time
 
 start = time.time()
+inp = 0
+middle = 0
 
 # ----------------- Modems (PSK and QAM) -----------------
 class PSKModem:
@@ -306,11 +308,15 @@ def main():
         "EbNo_range": np.arange(0, 11, 1), # does not affect ccdf
         "num_symb": int(input("Enter number of OFDM symbols (Default: 100): ") or "100")
     }
+    inp = time.time()
+
     subc = p["subc"]
     cp = p["cp"]
     M = p["M"]
     bits_per_symbol = p["bits_per_symbol"]
     num_symb = p["num_symb"]
+    L_values = [8]
+    CR_list = [0.8, 1.0, 1.2]
 
     # choose modem
     if p["M"] in [2, 4, 8]:
@@ -318,9 +324,8 @@ def main():
     else:
         modem = QAMModem(M)
 
-    CR_list = [0.8, 1.0, 1.2, 1.4, 1.6]
-    # ! useless
-    L = 8  # Oversampling factor
+    # todo: needs to be fixed to support multiple L values
+    L = L_values[0]  # Oversampling factor
 
     BER_results = {
         'no_clipping': [],
@@ -439,15 +444,15 @@ def main():
     plt.tight_layout()
     plt.show()
 
+    middle = time.time()
+    print(f"\nBER simulation done in {middle - inp:.2f} seconds.")
+
     # ----------------- PAPR simulation with clipping/filtering -----------------
     # calc_papr = input("\nDo you want to calculate PAPR and plot CCDF? (Enter 'Y' to continue and any other key to terminate): ").strip().lower()
     calc_papr = 'y'
     # ... inside main() ...
     print(calc_papr)
     if calc_papr == 'y' or calc_papr == '':
-        # L_values = [1, 2, 4]
-        L_values = [8]
-
         # --- FIX 1: ADJUST CR ---
         # A CR of 1.2 linear is ~1.6dB (Too low).
         # Let's use 7 dB which is a standard practical value.
@@ -524,4 +529,5 @@ if __name__ == "__main__":
     main()
 
 end = time.time()
+print(f"\nCCDF simulation done in {end - middle:.2f} seconds.")
 print(f"\nTotal execution time: {end - start:.2f} seconds")
