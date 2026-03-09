@@ -10,7 +10,7 @@ N = 1024            # Number of Subcarriers
 L = 4               # Oversampling Factor
 N_fft = N * L       # IFFT Size (extended to 1024)
 CP = 32             # Cyclic Prefix
-iterations = 20000  # High iterations to capture the 14dB tail
+samples_per_L = 20000  # High samples_per_L to capture the 14dB tail
 # clipping_ratios = [0.8, 1.0, 1.2, 1.4, 1.6] # Clipping Ratios (CR)
 # clipping_ratios = [10 ** (1/10), 10 ** (3/10), 10 ** (5/10), 10 ** (7/10)] # Clipping Ratios (CR)
 clipping_ratios_dB = [1, 3, 5, 7]
@@ -45,7 +45,7 @@ plt.figure(figsize=(10, 7))
 papr_unclipped = []
 clipped_papr_dict = {cr: [] for cr in clipping_ratios}
 
-for _ in range(iterations):
+for _ in range(samples_per_L):
     # 1. Generate 16-QAM Symbols
     symbols = qam16_mod(N)
 
@@ -100,7 +100,7 @@ for i, cr in enumerate(clipping_ratios):
 plt.axhline(y=1e-2, color='gray', linestyle=':', alpha=0.6)
 plt.xlim([4, 12]) # Set X-axis to 16dB to match reference image
 plt.ylim([1e-3, 1])
-plt.title(f'PAPR Distribution: 16QAM (N={N}, L={L})\nUnclipped vs. Clipped and filtered')
+plt.title(f'PAPR Distribution: 16QAM (N={N}, L={L})\nUnclipped vs. Clipped and filtered at different CRs')
 plt.xlabel('PAPR$_0$ [dB]')
 plt.ylabel('Prob(PAPR > PAPR$_0$)')
 plt.grid(True, which="both", ls="-", alpha=0.3)
