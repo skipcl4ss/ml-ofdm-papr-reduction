@@ -70,7 +70,7 @@ for i in range(100):
     # rx.append(rx_chunk)
 
     loop_end = time.time()
-    print(f"Iteration {i+1}/100 completed in {loop_end - loop_start:.2f} seconds")
+    print(f"Iteration {i + 1}/100 completed in {loop_end - loop_start:.2f} seconds")
     print(f"{loop_end - before_loop:.2f} seconds since before loop start")
 
 # tx = np.array(tx, dtype=np.float32)

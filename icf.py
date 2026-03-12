@@ -1,9 +1,9 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy import signal
 from ofdm.papr import calculate_papr
 from ofdm.modem import qam16_mod
 from ofdm.candf import clip_time
+from ofdm.ccdf import plot_CCDF, plot_CCDF_compare
 import time
 
 start = time.time()
@@ -24,9 +24,12 @@ b, a = signal.cheby1(N=4, rp=1, Wn=fp, btype='low', analog=False)
 
 # Simulation
 papr_unclipped = []
-iterations_papr_dict = {i: [] for i in range(iterations)}
+iterations_papr = [[] for _ in range(iterations)]
+
+# todo: implement scf
 
 for _ in range(samples_per_L):
+    # todo: implement qpsk
     # Generate 16-QAM Symbols
     symbols = qam16_mod(N)
 
@@ -52,37 +55,17 @@ for _ in range(samples_per_L):
         # x_current = signal.filtfilt(b, a, x_clipped)
 
         # Store PAPR of the current iterative result
-        iterations_papr_dict[i].append(calculate_papr(x_current))
+        iterations_papr[i].append(calculate_papr(x_current))
+
+# todo: add CM metric
+# CM = 20 * np.log10(np.mean(np.abs(x_time) ** 4) / (np.mean(np.abs(x_time) ** 2) ** 2))
 
 # CCDF Calculation and Plotting
+# Plot Unclipped CCDF (Baseline), in addition to Clipped & Filtered CCDFs
+# plot_CCDF(papr_unclipped, N)
+plot_CCDF_compare([papr_unclipped] + iterations_papr, N, title_suffix=f'PAPR Distribution: 16QAM (N={N}, L={L}, CR={cr_dB}dB)\nICF')
 
-# Plot Unclipped CCDF (Baseline)
-papr_unclipped_sorted = np.sort(papr_unclipped)
-ccdf_unclipped = 1 - np.arange(len(papr_unclipped_sorted)) / len(papr_unclipped_sorted)
-mask_un = (ccdf_unclipped >= 0.0001)
-
-plt.figure(figsize=(10, 7))
-plt.semilogy(papr_unclipped_sorted[mask_un], ccdf_unclipped[mask_un],
-             'b-', label='Unclipped', lw=2)
-
-# Plot Clipped & Filtered CCDFs
-for i in range(iterations):
-    p_sorted = np.sort(iterations_papr_dict[i])
-    ccdf_val = 1.0 - np.arange(len(p_sorted)) / len(p_sorted)
-    mask = ccdf_val >= 0.0001
-    plt.semilogy(p_sorted[mask], ccdf_val[mask], label=f'ICF ({i + 1} iteration{"s" if i > 0 else ""})', lw=2)
-
-# --- Plot Formatting ---
-plt.axhline(y=1e-2, color='gray', linestyle=':', alpha=0.6)
-plt.xlim([4, 12])
-plt.ylim([1e-4, 1])
-plt.title(f'PAPR Distribution: 16QAM (N={N}, L={L}, CR={cr_dB}dB)\nICF')
-plt.xlabel('PAPR$_0$ [dB]')
-plt.ylabel('Prob(PAPR > PAPR$_0$)')
-plt.grid(True, which="both", ls="-", alpha=0.3)
-plt.legend(loc='lower left')
-plt.tight_layout()
-plt.show()
+# todo: add BER
 
 end = time.time()
 print(f"\nTotal execution time: {end - start:.2f} seconds")

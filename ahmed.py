@@ -183,7 +183,7 @@ def plot_CCDF_compare(papr_dict, N, title_suffix=''):
             linestyle = '-'
         plt.semilogy(sorted_papr, y_axis, color=colors[idx], linewidth=2, linestyle=linestyle, label=label)
 
-    all_data = np.concatenate([v for v in papr_dict.values() if v.size > 0]) if papr_dict else np.array([])
+    # all_data = np.concatenate([v for v in papr_dict.values() if v.size > 0]) if papr_dict else np.array([])
     # if all_data.size > 0:
     #     x_theory = np.linspace(np.min(all_data), np.max(all_data) + 2, 200)
     #     y_theory = theoretical_CCDF(N, x_theory)
@@ -306,7 +306,8 @@ def main():
         "bits_per_symbol": 2,
         # ! changeable
         "EbNo_range": np.arange(0, 11, 1), # does not affect ccdf
-        "num_symb": int(input("Enter number of OFDM symbols (Default: 100): ") or "100")
+        # "num_symb": int(input("Enter number of OFDM symbols (Default: 100): ") or "100")
+        "num_symb": 100
     }
     inp = time.time()
 
@@ -529,5 +530,7 @@ if __name__ == "__main__":
     main()
 
 end = time.time()
+# fixme: middle has a value of zero
+print(start, middle, end)
 print(f"\nCCDF simulation done in {end - middle:.2f} seconds.")
 print(f"\nTotal execution time: {end - start:.2f} seconds")
