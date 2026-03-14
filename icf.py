@@ -33,6 +33,7 @@ for _ in range(samples_per_L):
     # Generate 16-QAM Symbols
     symbols = qam16_mod(N)
 
+    # todo: use candf.py
     # Oversampling via Spectral Centering (Crucial for hitting 14dB)
     symbols_oversampled = np.zeros(N_fft, dtype=np.complex64)
     symbols_oversampled[:N // 2] = symbols[:N // 2]
