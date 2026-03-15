@@ -73,9 +73,5 @@ for i in range(100):
     print(f"Iteration {i + 1}/100 completed in {loop_end - loop_start:.2f} seconds")
     print(f"{loop_end - before_loop:.2f} seconds since before loop start")
 
-# tx = np.array(tx, dtype=np.float32)
-# rx = np.array(rx, dtype=np.float32)
-# np.savez_compressed("16qam_tx_rx_32.npz", tx=tx, rx=rx)
-
 end = time.time()
 print(f"\nTotal execution time: {end - start:.2f} seconds")

@@ -3,7 +3,7 @@ from scipy import signal
 from ofdm.papr import calculate_papr
 from ofdm.modem import qam16_mod
 from ofdm.candf import clip_time
-from ofdm.ccdf import plot_CCDF, plot_CCDF_compare
+from ofdm.ccdf import plot_ccdf, plot_ccdf_compare
 import time
 
 start = time.time()
@@ -20,7 +20,7 @@ iterations = 3
 
 # IIR Low-Pass Filter design (Chebyshev Type I)
 fp = 1 / L
-b, a = signal.cheby1(N=4, rp=1, Wn=fp, btype='low', analog=False)
+b, a = signal.cheby1(N=4, rp=1, Wn=fp)
 
 # Simulation
 papr_unclipped = []
@@ -63,8 +63,13 @@ for _ in range(samples_per_L):
 
 # CCDF Calculation and Plotting
 # Plot Unclipped CCDF (Baseline), in addition to Clipped & Filtered CCDFs
-# plot_CCDF(papr_unclipped, N)
-plot_CCDF_compare([papr_unclipped] + iterations_papr, N, title_suffix=f'PAPR Distribution: 16QAM (N={N}, L={L}, CR={cr_dB}dB)\nICF')
+plot_ccdf(papr_unclipped, f'PAPR Distribution: 16QAM (N={N}, L={L}, CR={cr_dB}dB)', "Unclipped")
+unclipped_and_iterations = [papr_unclipped] + iterations_papr
+labels = ["Unclipped"] + [
+ f"ICF ({i} iteration{'s' if i > 1 else ''})"
+ for i in range(1, iterations + 1)
+]
+plot_ccdf_compare(unclipped_and_iterations, f'PAPR Distribution: 16QAM (N={N}, L={L}, CR={cr_dB}dB)\nICF', labels)
 
 # todo: add BER
 
