@@ -5,9 +5,10 @@ from scipy.special import erfc
 import matplotlib.cm as cm
 import time
 
-start = time.time()
-inp = 0
-middle = 0
+# start = time.time()
+# inp = 0
+# ber_time = 0
+# ccdf_time = 0
 
 # ----------------- Modems (PSK and QAM) -----------------
 class PSKModem:
@@ -266,7 +267,7 @@ def param():
             break
         else:
             print("Kindly enter a valid modulation type.")
-    # This block asls for EbNo start and end as integers, and its step as a float
+    # This block asks for EbNo start and end as integers, and its step as a float
     while True:
         try:
             EbNo_start = int(input("Enter the start Eb/No (Default: 0): ") or "0")
@@ -310,6 +311,7 @@ def main():
         "num_symb": 100
     }
     inp = time.time()
+    # print(f"\ninput done in {inp - start:.2f} seconds.")
 
     subc = p["subc"]
     cp = p["cp"]
@@ -444,13 +446,13 @@ def main():
     plt.ylim([1e-3, 1e0])
     plt.tight_layout()
     plt.show()
-
-    middle = time.time()
-    print(f"\nBER simulation done in {middle - inp:.2f} seconds.")
+    ber_time = time.time()
+    print(ber_time)
+    print(f"\nBER simulation done in {ber_time - inp:.2f} seconds.")
 
     # ----------------- PAPR simulation with clipping/filtering -----------------
     # calc_papr = input("\nDo you want to calculate PAPR and plot CCDF? (Enter 'Y' to continue and any other key to terminate): ").strip().lower()
-    calc_papr = 'y'
+    calc_papr = 'n'
     # ... inside main() ...
     print(calc_papr)
     if calc_papr == 'y' or calc_papr == '':
@@ -525,12 +527,16 @@ def main():
         print("PAPR simulation done.")
     else:
         print("Terminating.")
+    ccdf_time = time.time()
+    print(f"\nCCDF simulation done in {ccdf_time - ber_time:.2f} seconds.")
+    print(f"\nTotal simulation done in {ccdf_time - inp:.2f} seconds.")
 
 if __name__ == "__main__":
     main()
 
-end = time.time()
-# fixme: middle has a value of zero
-print(start, middle, end)
-print(f"\nCCDF simulation done in {end - middle:.2f} seconds.")
-print(f"\nTotal execution time: {end - start:.2f} seconds")
+# end = time.time()
+# # fixme: time variable have a value of zero when used outside a function
+# print(start, inp, ber_time, ccdf_time, end) # ! inp, ber_time, and ccdf_time are zero
+# print(f"\ninput done in {inp - start:.2f} seconds.")
+# print(f"\nCCDF simulation done in {end - ber_time:.2f} seconds.")
+# print(f"\nTotal execution time: {end - start:.2f} seconds")
