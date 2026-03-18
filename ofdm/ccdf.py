@@ -9,21 +9,27 @@ def theoretical_ccdf(N, papr_dB_range):
     ccdf = 1 - (1 - np.exp(-gamma)) ** N
     return ccdf
 
-def plot_formatting(title_suffix=''):
-    plt.xlim([4, 12])
-    plt.ylim([1e-5, 1])
-    plt.xlabel('PAPR$_0$ [dB]')
-    plt.ylabel('Pr(PAPR > PAPR$_0$)')
+def plot_formatting(title_suffix='', metric='PAPR'):
+    if metric.lower() == 'papr':
+        plt.xlim([4, 12])
+        plt.xlabel('PAPR$_0$ [dB]')
+        plt.ylim([1e-4, 1])
+        plt.ylabel('Pr(PAPR > PAPR$_0$)')
+    elif metric.lower() == 'cm':
+        plt.xlim([2.5, 6])
+        plt.xlabel('Cubic Metric [dB]')
+        plt.ylim([1e-3, 1])
+        plt.ylabel('CCDF')
     plt.title(title_suffix)
     plt.grid(True, which='both')
     plt.axhline(y=1e-1, color='black', linestyle=':')
     plt.axhline(y=1e-2, color='black', linestyle=':')
     plt.axhline(y=1e-3, color='black', linestyle=':')
-    plt.axhline(y=1e-4, color='black', linestyle=':')
+    # plt.axhline(y=1e-4, color='black', linestyle=':')
     plt.legend(loc='lower left')
     # plt.tight_layout()
 
-def plot_ccdf(papr_dict, title_suffix='', label=None):
+def plot_ccdf(papr_dict, title_suffix='', label=None, metric='PAPR'):
     plt.figure(figsize=(10, 7))
     sorted_papr = np.sort(papr_dict)
     y_axis = np.arange(len(sorted_papr), 0, -1) / len(sorted_papr) # ? why dont we use the theoretical CCDF function
@@ -39,10 +45,10 @@ def plot_ccdf(papr_dict, title_suffix='', label=None):
     #     y_theory = theoretical_ccdf(N, x_theory)
     #     plt.semilogy(x_theory, y_theory, 'k--', linewidth=1.5, label='Theoretical (L=1)')
 
-    plot_formatting(title_suffix)
+    plot_formatting(title_suffix, metric)
     plt.show()
 
-def plot_ccdf_compare(papr_dict, title_suffix='', label=None):
+def plot_ccdf_compare(papr_dict, title_suffix='', label=None, metric='PAPR'):
     plt.figure(figsize=(10, 7))
     # colors = cm.viridis(np.linspace(0, 0.9, len(papr_dict)))
     for i, idx in enumerate(papr_dict):
@@ -65,5 +71,5 @@ def plot_ccdf_compare(papr_dict, title_suffix='', label=None):
     #     y_theory = theoretical_ccdf(N, x_theory)
     #     plt.semilogy(x_theory, y_theory, 'k--', linewidth=1.5, label='Theoretical (L=1)')
 
-    plot_formatting(title_suffix)
+    plot_formatting(title_suffix, metric)
     plt.show()
