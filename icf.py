@@ -1,9 +1,9 @@
 import numpy as np
 from scipy import signal
-from ofdm.papr import calculate_papr, calculate_cm
+from ofdm.metrics import calculate_papr, calculate_cm
 from ofdm.modem import qam16_mod
 from ofdm.candf import clip_time
-from ofdm.ccdf import plot_ccdf_compare
+from ofdm.ccdf import plot_ccdf_compare, plot_ccdf
 from nnicf import NNICFMapper, normalize
 import time
 import torch
@@ -25,15 +25,13 @@ fp = 1 / L
 b, a = signal.cheby1(N=4, rp=1, Wn=fp)
 
 # Simulation
-papr_unclipped = []
+papr_unclipped, cm_unclipped = [], []
 iterations_papr = [[] for _ in range(iterations)]
-cm_unclipped = []
 iterations_cm = [[] for _ in range(iterations)]
 
 # todo: implement scf
 
-tx_time = [[], []]
-rx_time = [[], []]
+tx_time, rx_time = [[], []], [[], []]
 for _ in range(samples_per_L):
     # todo: implement qpsk
     # Generate 16-QAM Symbols
@@ -91,8 +89,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NN_Mod_Re = NNICFMapper(N_fft).to(device)
 NN_Mod_Im = NNICFMapper(N_fft).to(device)
 # Inject the trained weights
-NN_Mod_Re.load_state_dict(torch.load("./trained_models/mod_re_weights_80_20.pth", weights_only=True))
-NN_Mod_Im.load_state_dict(torch.load("./trained_models/mod_im_weights_80_20.pth", weights_only=True))
+NN_Mod_Re.load_state_dict(torch.load("./trained_models/mod_im_weights_80_20_dot03.pth", weights_only=True))
+NN_Mod_Im.load_state_dict(torch.load("./trained_models/mod_im_weights_80_20_dot03.pth", weights_only=True))
 NN_Mod_Re.eval()
 NN_Mod_Im.eval()
 
@@ -118,6 +116,7 @@ pred_cm = np.array(pred_cm)
 labels = ['Original OFDM', f'Clipped OFDM ({iterations} iterations)', 'NNICF Predicted OFDM']
 plot_ccdf_compare([papr_unclipped, iterations_papr[-1], pred_papr], f"Original vs Clipped vs NNICF Predicted OFDM\n16QAM (N={N}, L={L}, CR={cr_dB}dB)\nModel 2 (80 Training 20 Testing)", labels)
 plot_ccdf_compare([cm_unclipped, iterations_cm[-1], pred_cm], f"Original vs Clipped vs NNICF Predicted OFDM\n16QAM (N={N}, L={L}, CR={cr_dB}dB)\nModel 2 (80 Training 20 Testing)", labels, metric="CM")
+plot_ccdf(pred_cm, f"NNICF Predicted OFDM\n16QAM (N={N}, L={L}, CR={cr_dB}dB)\nModel 2 (80 Training 20 Testing)", metric="CM")
 
 end = time.time()
 print(f"\nTotal execution time: {end - start:.2f} seconds")

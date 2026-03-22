@@ -11,12 +11,13 @@ def theoretical_ccdf(N, papr_dB_range):
 
 def plot_formatting(title_suffix='', metric='PAPR'):
     if metric.lower() == 'papr':
-        plt.xlim([4, 12])
+        # plt.xlim([4, 12])
         plt.xlabel('PAPR$_0$ [dB]')
         plt.ylim([1e-4, 1])
         plt.ylabel('Pr(PAPR > PAPR$_0$)')
+        plt.axhline(y=1e-3, color='black', linestyle=':')
     elif metric.lower() == 'cm':
-        plt.xlim([2.5, 6])
+        # plt.xlim([2.5, 6])
         plt.xlabel('Cubic Metric [dB]')
         plt.ylim([1e-3, 1])
         plt.ylabel('CCDF')
@@ -24,7 +25,6 @@ def plot_formatting(title_suffix='', metric='PAPR'):
     plt.grid(True, which='both')
     plt.axhline(y=1e-1, color='black', linestyle=':')
     plt.axhline(y=1e-2, color='black', linestyle=':')
-    plt.axhline(y=1e-3, color='black', linestyle=':')
     # plt.axhline(y=1e-4, color='black', linestyle=':')
     plt.legend(loc='lower left')
     # plt.tight_layout()
@@ -71,5 +71,9 @@ def plot_ccdf_compare(papr_dict, title_suffix='', label=None, metric='PAPR'):
     #     y_theory = theoretical_ccdf(N, x_theory)
     #     plt.semilogy(x_theory, y_theory, 'k--', linewidth=1.5, label='Theoretical (L=1)')
 
+    if metric.lower() == 'papr':
+        plt.xlim([4, 12])
+    elif metric.lower() == 'cm':
+        plt.xlim([2.5, 6])
     plot_formatting(title_suffix, metric)
     plt.show()

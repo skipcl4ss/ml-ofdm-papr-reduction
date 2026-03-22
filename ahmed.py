@@ -382,7 +382,7 @@ def main():
                 rx_bits_clipped = modem.demodulate(rx_symbols_clipped, 'hard')
                 bit_error_clipped[CR] += np.sum(tx_bits != rx_bits_clipped)
 
-                # Get clipped+filtered signal
+                # Get clipped + filtered signal
                 clipped_filtered_time = clip_and_filter_ofdm(tx_symbols, subc, L=L, CR=CR)
                 filtered_downsampled = clipped_filtered_time[::L]
                 tx_signal_filtered = np.concatenate([filtered_downsampled[-cp:], filtered_downsampled])
