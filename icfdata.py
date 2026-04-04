@@ -1,17 +1,20 @@
 import numpy as np
 from scipy import signal
-from ofdm.modem import qam16_mod
+from ofdm.modem import qam16_mod, qpsk_mod
 from ofdm.candf import clip_time
 # import gc
 import time
+import os
 
 start = time.time()
 
 # Parameters
 N = 256                 # Number of Subcarriers
+mid = N // 2
 L = 4                   # Oversampling Factor
 N_fft = N * L           # IFFT Size (extended to 1024)
-CP = 32                 # Cyclic Prefix
+# CP = 32                 # Cyclic Prefix
+CP = N // 4             # Cyclic Prefix
 samples_per_L = 10000   # High value to capture the CCDF tail
 cr_dB = 6
 cr = 10 ** (cr_dB / 20)
@@ -30,13 +33,17 @@ for i in range(100):
     tx_time = [[], []]
     rx_time = [[], []]
     for _ in range(samples_per_L):
-        # Generate 16-QAM Symbols
-        symbols = qam16_mod(N)
+        # # Generate 16-QAM Symbols
+        # tx_data = np.random.randint(0, 16, N)
+        # symbols = qam16_mod(tx_data)
+        # Generate QPSK Symbols
+        tx_data = np.random.randint(0, 4, N)
+        symbols = qpsk_mod(tx_data)
 
         # Oversampling via Spectral Centering (Crucial for hitting 14dB)        symbols_oversampled = np.zeros(N_fft, dtype=np.complex64)
         symbols_oversampled = np.zeros(N_fft, dtype=np.complex64)
-        symbols_oversampled[:N // 2] = symbols[:N // 2]
-        symbols_oversampled[-N // 2:] = symbols[N // 2:]
+        symbols_oversampled[:mid] = symbols[:mid]
+        symbols_oversampled[-mid:] = symbols[mid:]
 
         # IFFT to Time Domain (Capturing true analog peaks)
         # Scale by L to maintain power through the zero-padded IFFT
@@ -62,7 +69,10 @@ for i in range(100):
 
     tx_time = np.array(tx_time, dtype=np.float32)
     rx_time = np.array(rx_time, dtype=np.float32)
-    np.savez_compressed(f"16QAMdata/16qam_tx_rx_32_part_{i:03d}.npz", tx=tx_time, rx=rx_time)
+
+    os.makedirs("data_npz", exist_ok=True)
+    # np.savez_compressed(f"data_npz/16qam_tx_rx_32_part_{i:02d}.npz", tx=tx_time, rx=rx_time)
+    np.savez_compressed(f"data_npz/qpsk_tx_rx_32_part_{i:02d}.npz", tx=tx_time, rx=rx_time)
     del tx_time, rx_time
     # gc.collect()
 
@@ -71,7 +81,7 @@ for i in range(100):
 
     loop_end = time.time()
     print(f"Iteration {i + 1}/100 completed in {loop_end - loop_start:.2f} seconds")
-    print(f"{loop_end - before_loop:.2f} seconds since before loop start")
+    print(f"{loop_end - before_loop:.2f} seconds passed since before loop start")
 
 end = time.time()
 print(f"\nTotal execution time: {end - start:.2f} seconds")

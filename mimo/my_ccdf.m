@@ -1,3 +1,5 @@
+% iirc, this was an edited version of CCDF_of_clipped_filtered_OFDM_signal.m, which was giving errors in MATLAB
+
 % CCDF_of_clipped_filtered_OFDM_signal.m
 % Plot Fig. 7.16
 clear, clf
@@ -10,21 +12,16 @@ Tsym=1/(fs/N); Ts=1/(fs*L); % OFDM symbol period and Sampling period
 fc = 2e6; wc = 2*pi*fc; % Carrier frequency
 t = [0:Ts:2*Tsym-Ts]/Tsym; % Time vector
 A = modnorm(qammod([0:M-1],M),'avpow',1); % Normalization factor
-
-% Modern QAM modulation
 Fs=8; Norder=104; % Baseband sampling frequency and Order
 dens=20; % Density factor of filter
 FF=[0 1.4 1.5 2.5 2.6 Fs/2]; % Stopband/Passband/Stopband frequency edge
 WW=[10 1 10]; % Stopband/Passband/Stopband weight vector
 h = firpm(Norder,FF/(Fs/2),[0 0 1 1 0 0],WW,{dens}); % BPF coefficients
-Clipped_errCnt = zeros(size(CRs));
-ClippedFiltered_errCnt = zeros(size(CRs));
 CF = zeros(1,Nblk); CF_c = zeros(N_CR,Nblk); CF_cf = zeros(N_CR,Nblk);
 ber_analytic = berawgn(SNRdBs-10*log10(b),'qam',M);
 kk1=1:(N/2-Ncp)*L; kk2=kk1(end)+1:N/2*L+N*L; kk3=kk2(end)+[1:N*L/2];
 z = [2:0.1:16]; len_z = length(z);
-
-% Iteration with increasing SNRdB
+% -––––––––––––- Iteration with increasing SNRdB -––––––––––––-%
 for i = 1:N_SNR
     SNRdB = SNRdBs(i);
     for ncf = 0:2 % no/clip/clip&filter
@@ -132,8 +129,3 @@ xlabel('SNR [dB]')
 ylabel('BER')
 title('BER vs SNR')
 hold off
-
-function y=zero_pasting(x)
-% Paste zeros at the center half of the input sequence x
-N=length(x); M=ceil(N/4); y = [x(1:M) zeros(1,N/2) x(N-M+1:N)];
-end 

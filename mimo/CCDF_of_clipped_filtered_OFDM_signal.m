@@ -10,8 +10,8 @@ Tsym=1/(fs/N); Ts=1/(fs*L); % OFDM symbol period and Sampling period
 fc = 2e6; wc = 2*pi*fc; % Carrier frequency
 t = [0:Ts:2*Tsym-Ts]/Tsym; % Time vector
 A = modnorm(qammod([0:M-1],M),'avpow',1); % Normalization factor
-
-% Modern QAM modulation
+mdmod = modem.qammod('M',M, 'SymbolOrder','Gray','InputType','Bit');
+mddem = modem.qamdemod('M',M, 'SymbolOrder','Gray','OutputType','Bit');
 Fs=8; Norder=104; % Baseband sampling frequency and Order
 dens=20; % Density factor of filter
 FF=[0 1.4 1.5 2.5 2.6 Fs/2]; % Stopband/Passband/Stopband frequency edge
@@ -23,8 +23,7 @@ CF = zeros(1,Nblk); CF_c = zeros(N_CR,Nblk); CF_cf = zeros(N_CR,Nblk);
 ber_analytic = berawgn(SNRdBs-10*log10(b),'qam',M);
 kk1=1:(N/2-Ncp)*L; kk2=kk1(end)+1:N/2*L+N*L; kk3=kk2(end)+[1:N*L/2];
 z = [2:0.1:16]; len_z = length(z);
-
-% Iteration with increasing SNRdB
+% -––––––––––––- Iteration with increasing SNRdB -––––––––––––-%
 for i = 1:N_SNR
     SNRdB = SNRdBs(i);
     for ncf = 0:2 % no/clip/clip&filter
@@ -109,8 +108,3 @@ end
 subplot(222)
 semilogy(SNRdBs,ber_no,'o', SNRdBs,ber_analytic,'k')
 grid on
-
-function y=zero_pasting(x)
-% Paste zeros at the center half of the input sequence x
-N=length(x); M=ceil(N/4); y = [x(1:M) zeros(1,N/2) x(N-M+1:N)];
-end
