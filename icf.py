@@ -21,8 +21,21 @@ samples_per_L = 10000   # High value to capture the CCDF tail
 cr_dB = 6
 cr = 10 ** (cr_dB / 20)
 iterations = 3
-M = 16
+
+# modulation scheme
+mod = "16qam"
+# mod = "qpsk"
+# M = 16
 # qam_modem = QAMModem(M)
+
+# Hyperparameters (used only in saving and loading files, not in the actual C&F process)
+lr = 0.001
+lr_str = "dot" + str(lr).split(".")[1]
+
+# Data splitting (used only in saving and loading files, not in the actual C&F process)
+train_size = 80
+test_size = (100 - train_size) or 1
+train_test_str = f"{train_size}_{test_size}"
 
 # IIR Low-Pass Filter design (Chebyshev Type I)
 fp = 1 / L
@@ -37,14 +50,15 @@ iterations_cm = [[] for _ in range(iterations)]
 
 tx_time, rx_time = [[], []], [[], []]
 for _ in range(samples_per_L):
-    # todo: implement qpsk
-    # Generate 16-QAM Symbols
-    # tx_data = np.random.randint(0, 16, N)
-    # symbols = qam16_mod(tx_data)
-    # Generate QPSK Symbols
-    tx_data = np.random.randint(0, 4, N)
-    symbols = qpsk_mod(tx_data)
-    # symbols = qam_modem.modulate(tx_data)
+    if mod == "16qam":
+        # Generate 16-QAM Symbols
+        tx_data = np.random.randint(0, 16, N)
+        symbols = qam16_mod(tx_data)
+        # symbols = qam_modem.modulate(tx_data)
+    elif mod == "qpsk":
+        # Generate QPSK Symbols
+        tx_data = np.random.randint(0, 4, N)
+        symbols = qpsk_mod(tx_data)
 
     # todo: use candf.py
     # Oversampling via Spectral Centering (Crucial for hitting 14dB)
@@ -97,8 +111,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NN_Mod_Re = NNICFMapper(N_fft).to(device)
 NN_Mod_Im = NNICFMapper(N_fft).to(device)
 # Inject the trained weights
-NN_Mod_Re.load_state_dict(torch.load("./trained_models/qpsk_mod_im_weights_80_20_dot005.pth", weights_only=True))
-NN_Mod_Im.load_state_dict(torch.load("./trained_models/qpsk_mod_im_weights_80_20_dot005.pth", weights_only=True))
+NN_Mod_Re.load_state_dict(torch.load(f"trained_models/{mod}_mod_re_weights_{train_test_str}_{lr_str}.pth", weights_only=True))
+NN_Mod_Im.load_state_dict(torch.load(f"trained_models/{mod}_mod_im_weights_{train_test_str}_{lr_str}.pth", weights_only=True))
 NN_Mod_Re.eval()
 NN_Mod_Im.eval()
 
@@ -109,8 +123,6 @@ with torch.no_grad():
 
 # 4. Reconstruct the Complex OFDM Signals
 # each has length of samples_per_L
-# original_complex = tx_real.numpy() + 1j * tx_imag.numpy()
-# clipped_complex = rx_real.numpy() + 1j * rx_imag.numpy()
 predicted_complex = predicted_real + 1j * predicted_imag
 
 # 5. Calculate PAPR (Peak-to-Average Power Ratio) for CCDF
@@ -122,11 +134,21 @@ pred_papr = np.array(pred_papr)
 pred_cm = np.array(pred_cm)
 
 # 6. Plot the CCDF
+title = f"NNICF Predicted OFDM\n{mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)\nlr = {lr} ({train_size} Training/{test_size} Testing)"
 labels = ['Original OFDM', f'Clipped OFDM ({iterations} iterations)', 'NNICF Predicted OFDM']
-plot_ccdf_compare([papr_unclipped, iterations_papr[-1], pred_papr], f"Original vs Clipped vs NNICF Predicted OFDM\n16QAM (N={N}, L={L}, CR={cr_dB}dB)", labels)
-plot_ccdf_compare([cm_unclipped, iterations_cm[-1], pred_cm], f"Original vs Clipped vs NNICF Predicted OFDM\n16QAM (N={N}, L={L}, CR={cr_dB}dB)", labels, metric="CM")
-plot_ccdf(pred_papr, f"NNICF Predicted OFDM\n16QAM (N={N}, L={L}, CR={cr_dB}dB)\nModel 2 (80 Training 20 Testing)")
-plot_ccdf(pred_cm, f"NNICF Predicted OFDM\n16QAM (N={N}, L={L}, CR={cr_dB}dB)\nModel 2 (80 Training 20 Testing)", metric="CM")
+
+plot_ccdf_compare([papr_unclipped, iterations_papr[-1], pred_papr], f"Original vs Clipped vs {title}", labels)
+plot_ccdf_compare([cm_unclipped, iterations_cm[-1], pred_cm], f"Original vs Clipped vs {title}", labels, metric="CM")
+
+y_axis = np.arange(samples_per_L, 0, -1) / samples_per_L # ? why dont we use the theoretical CCDF function
+papr_floor = np.where(y_axis == 1e-4)[0]
+papr_vlines = [np.sort(papr_unclipped)[papr_floor], np.sort(iterations_papr[-1])[papr_floor]]
+plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines)
+
+cm_floor = np.where(y_axis == 1e-3)[0]
+cm_vlines = [np.sort(cm_unclipped)[cm_floor], np.sort(iterations_cm[-1])[cm_floor]]
+plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
+
 # labels = ["OG", "CLipped 1", "CLipped 2", "CLipped 3"]
 # plot_ccdf_compare([papr_unclipped, *iterations_papr], label=labels, metric="papr")
 # plot_ccdf_compare([cm_unclipped, *iterations_cm], label=labels, metric="cm")

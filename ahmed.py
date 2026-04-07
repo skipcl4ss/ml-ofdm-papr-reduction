@@ -452,7 +452,7 @@ def main():
 
     # ----------------- PAPR simulation with clipping/filtering -----------------
     # calc_papr = input("\nDo you want to calculate PAPR and plot CCDF? (Enter 'Y' to continue and any other key to terminate): ").strip().lower()
-    calc_papr = 'n'
+    calc_papr = 'y'
     # ... inside main() ...
     print(calc_papr)
     if calc_papr == 'y' or calc_papr == '':

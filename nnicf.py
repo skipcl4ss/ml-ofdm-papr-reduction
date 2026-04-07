@@ -1,11 +1,31 @@
 import torch
 import torch.nn as nn
-import os
 
 # Explicitly tell PyTorch to utilize your 8 CPU cores for matrix math
 # Check for GPU availability to drastically speed up training
 # ! cuda is available only on nvidia gpu
 torch.set_num_threads(8)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+def normalize(X_raw, Y_raw, part):
+    # 1. Extract Real or Imaginary
+    if part == "real":
+        part_idx = 0
+    elif part == "imag":
+        part_idx = 1
+
+    X_batch = torch.tensor(X_raw[part_idx, :, :], dtype=torch.float32)
+    Y_batch = torch.tensor(Y_raw[part_idx, :, :], dtype=torch.float32)
+
+    # 2. Normalize once and for all
+    X_min, X_max = X_batch.min(), X_batch.max()
+    Y_min, Y_max = Y_batch.min(), Y_batch.max()
+
+    X_norm = 2.0 * ((X_batch - X_min) / (X_max - X_min)) - 1.0 if X_max != X_min else X_batch
+    Y_norm = 2.0 * ((Y_batch - Y_min) / (Y_max - Y_min)) - 1.0 if Y_max != Y_min else Y_batch
+
+    # 3. Return as a hyper-fast PyTorch file
+    return X_norm, Y_norm
 
 class TriangularActivation(nn.Module):
     """
@@ -32,28 +52,3 @@ class NNICFMapper(nn.Module):
         x = self.activation(self.hidden2(x))
         x = self.output(x) # Standard linear output
         return x
-
-def normalize(X_raw, Y_raw, part="real"):
-    output_dir = "./16QAMpt/"
-    os.makedirs(output_dir, exist_ok=True)
-
-    # 2. Extract Real or Imaginary
-    if part == "real":
-        part_idx = 0
-    elif part == "imag":
-        part_idx = 1
-    else:
-        raise ValueError("Part must be 'real' or 'imag'")
-
-    X_batch = torch.tensor(X_raw[part_idx, :, :], dtype=torch.float32)
-    Y_batch = torch.tensor(Y_raw[part_idx, :, :], dtype=torch.float32)
-
-    # 3. Normalize once and for all
-    X_min, X_max = X_batch.min(), X_batch.max()
-    Y_min, Y_max = Y_batch.min(), Y_batch.max()
-
-    X_norm = 2.0 * ((X_batch - X_min) / (X_max - X_min)) - 1.0 if X_max != X_min else X_batch
-    Y_norm = 2.0 * ((Y_batch - Y_min) / (Y_max - Y_min)) - 1.0 if Y_max != Y_min else Y_batch
-
-    # 4. Save as a hyper-fast PyTorch file
-    return X_norm, Y_norm

@@ -66,7 +66,6 @@ for i in range(100):
             if j == iterations - 1:
                 rx_time[0].append(np.real(x_current).astype(np.float32, copy=False))
                 rx_time[1].append(np.imag(x_current).astype(np.float32, copy=False))
-
     tx_time = np.array(tx_time, dtype=np.float32)
     rx_time = np.array(rx_time, dtype=np.float32)
 
