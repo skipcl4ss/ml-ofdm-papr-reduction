@@ -1,6 +1,9 @@
 import numpy as np  # Import the NumPy library for numerical operations and array handling
 from matplotlib import pyplot as plt  # Import Matplotlib's pyplot for creating plots and charts
 from scipy.signal import firwin, lfilter  # Import FIR filter design (firwin) and digital filtering (lfilter) from SciPy
+import time
+
+start = time.time()
 
 # ----------------------------------------------------
 # Parameters
@@ -207,3 +210,7 @@ plt.ylim((10 ** -2, 10 ** 0))
 plt.title("PAPR CCDF – Multi-CR Clipping & Filtering (`clipping.py`)")  # Set the plot title
 plt.legend()  # Display the legend
 plt.show()  # Display the second plot (CCDF curves)
+
+end = time.time()
+# ~1s (some parts are commented)
+print(f"\nTotal execution time: {end - start:.2f} seconds")

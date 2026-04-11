@@ -1,6 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
+import time
+
+start = time.time()
 
 # --- Configuration Based on Paper  ---
 # OVERSAMPLING_FACTOR = 4  # L
@@ -214,4 +217,8 @@ for N in N_VALUES:
     plot_ccdf(simulation_data, N)
 
     # Optionally plot signals for a specific CR (example: first CR)
-    # plot_signals(simulation_data, N)  # or plot_signals(simulation_data, N, cr=1.2)
+    plot_signals(simulation_data, N)  # or plot_signals(simulation_data, N, cr=1.2)
+
+end = time.time()
+# ~7s
+print(f"\nTotal execution time: {end - start:.2f} seconds")

@@ -1,8 +1,10 @@
 import sys
-
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy.special import erfc
+import time
+
+start = time.time()
 
 def addCP(OFDM_time):
     CP = OFDM_time[-cp:]               # take the last cp samples ...
@@ -162,7 +164,8 @@ if __name__ == "__main__":
         for n in range(K_BER):
             bits = np.random.binomial(n=1, p=0.5, size=payloadBits_per_signal)
             bits_SP = bits.reshape((len(dataCarriers), mu))
-
+            print("bits", len(bits))
+            print("bits_SP", len(bits_SP))
             mapped_bits, demapping_table = mapping(bits_SP, modulation_type)
             OFDM_time = np.fft.ifft(mapped_bits)
 
@@ -217,7 +220,7 @@ if __name__ == "__main__":
     plt.figure()
     plt.semilogy(Eb_No_dB, BER, 'bo-', label='Simulated BER')
     plt.semilogy(Eb_No_dB, BER_theoretical, 'r--', label='Theoretical BER')
-    plt.title(f"Bit Error Rate (BER) vs SNR ({modulation_type})")
+    plt.title(f"Bit Error Rate (BER) vs SNR ({modulation_type}) (shorter.py)")
     plt.xlabel("Eb/No (dB)")
     plt.ylabel("BER")
     plt.grid(True, which='both', alpha=0.5)
@@ -225,3 +228,7 @@ if __name__ == "__main__":
     plt.legend()
     plt.tight_layout()
     plt.show()
+
+end = time.time()
+# ~54s
+print(f"\nTotal execution time: {end - start:.2f} seconds")

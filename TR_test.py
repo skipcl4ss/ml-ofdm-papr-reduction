@@ -2,6 +2,9 @@
 import numpy as np
 from matplotlib import pyplot as plt
 # from scipy.special import erfc
+import time
+
+start = time.time()
 
 
 # --- Helper Functions ---
@@ -169,87 +172,87 @@ if __name__ == "__main__":
         PAPR_original.append(peak_pwr / avg_pwr)
 
 
-    # results = {}
-    # for iteration in iterations:
-    #     PAPR_with_TR = []
-    #     for i in range(K_PAPR):
-    #         #if i % 100 == 0: print(f"Processing symbol {i}...")
-    #
-    #         # bits = np.random.binomial(n=1, p=0.5, size=payloadBits_per_signal)
-    #         # Line 188 and 217:
-    #         bits = rng.integers(0, 2, size=payloadBits_per_signal, dtype=np.int8)
-    #         bits_SP = bits.reshape((len(data_indices), mu))
-    #
-    #         mapped_symbols, _ = mapping(bits_SP, modulation_type)
-    #
-    #         OFDM_freq = np.zeros(N, dtype=complex)
-    #         OFDM_freq[data_indices] = mapped_symbols # reserved_indices remain 0+0j
-    #
-    #         OFDM_time = np.fft.ifft(OFDM_freq)
-    #         peak_val = np.max(np.abs(OFDM_time))
-    #         avg_pwr = np.mean(np.abs(OFDM_time) ** 2)
-    #         papr_db = 10 * np.log10((peak_val ** 2) / avg_pwr)
-    #         # if papr_db > 9.0:
-    #         #     target_ratio = 10 ** (target_papr_db / 10)
-    #         #
-    #         #     # 1. Run Tone Reservation
-    #         #     OFDM_time_TR = tone_reservation(OFDM_time, c_shifts, iteration, target_ratio, steps)
-    #         #
-    #         #     # 2. Extract the Peak Cancelling Signal (c)
-    #         #     # Since Output = Original + c, then c = Output - Original
-    #         #     # (Note: Your TR function subtracts, so c will be negative, but magnitude is what matters)
-    #         #     peak_cancelling_signal = OFDM_time_TR - OFDM_time
-    #         #
-    #         #     # Calculate new PAPR
-    #         #     peak_val_tr = np.max(np.abs(OFDM_time_TR))
-    #         #     avg_pwr_tr = np.mean(np.abs(OFDM_time_TR) ** 2)
-    #         #     papr_tr_db = 10 * np.log10((peak_val_tr ** 2) / avg_pwr_tr)
-    #         #
-    #         #     print(f"Found Symbol #{i}")
-    #         #     print(f"Original PAPR: {papr_db:.2f} dB")
-    #         #     print(f"New PAPR:      {papr_tr_db:.2f} dB")
-    #         #
-    #         #     # --- PLOTTING ---
-    #         #     plt.figure(figsize=(10, 8))
-    #         #
-    #         #     # Subplot 1: Original vs Output
-    #         #     plt.subplot(2, 1, 1)
-    #         #     plt.plot(np.abs(OFDM_time), 'b-', alpha=0.6, label='Original Signal')
-    #         #     plt.plot(np.abs(OFDM_time_TR), 'r-', linewidth=1.5, label='Output Signal (with TR)')
-    #         #
-    #         #     # Draw Threshold Line
-    #         #     target_amp = np.sqrt(target_ratio * avg_pwr)
-    #         #     plt.axhline(y=target_amp, color='g', linestyle='--', label='Target Threshold')
-    #         #
-    #         #     plt.title(f'PAPR Reduction: {papr_db:.1f}dB -> {papr_tr_db:.1f}dB')
-    #         #     plt.ylabel('Signal Magnitude')
-    #         #     plt.legend(loc='upper right')
-    #         #     plt.grid(True, alpha=0.3)
-    #         #
-    #         #     # Subplot 2: The "Noise" we added (Cancelling Signal)
-    #         #     plt.subplot(2, 1, 2)
-    #         #     plt.plot(peak_cancelling_signal, 'k-', label='Peak Cancelling Signal (c)')
-    #         #     plt.title('Peak Cancelling Signal (Generated on Reserved Tones)')
-    #         #     plt.xlabel('Time Samples')
-    #         #     plt.ylabel('Magnitude')
-    #         #     plt.legend(loc='upper right')
-    #         #     plt.grid(True, alpha=0.3)
-    #         #
-    #         #     plt.tight_layout()
-    #         #     plt.show()
-    #         #
-    #         #     break  # Stop after plotting one symbol
-    #
-    #         target_ratio = 10 ** (target_papr_db / 10)
-    #         OFDM_time_TR = tone_reservation(OFDM_time, c_shifts, iteration, target_ratio, steps)
-    #
-    #         # calculating new PAPR after TR
-    #         peak_pwr_tr = np.max(np.abs(OFDM_time_TR) ** 2)
-    #         avg_pwr_tr = np.mean(np.abs(OFDM_time_TR) ** 2)
-    #         PAPR_with_TR.append(peak_pwr_tr / avg_pwr_tr)
-    #
-    #
-    #     results[iteration] = PAPR_with_TR
+    results = {}
+    for iteration in iterations:
+        PAPR_with_TR = []
+        for i in range(K_PAPR):
+            #if i % 100 == 0: print(f"Processing symbol {i}...")
+
+            # bits = np.random.binomial(n=1, p=0.5, size=payloadBits_per_signal)
+            # Line 188 and 217:
+            bits = rng.integers(0, 2, size=payloadBits_per_signal, dtype=np.int8)
+            bits_SP = bits.reshape((len(data_indices), mu))
+
+            mapped_symbols, _ = mapping(bits_SP, modulation_type)
+
+            OFDM_freq = np.zeros(N, dtype=complex)
+            OFDM_freq[data_indices] = mapped_symbols # reserved_indices remain 0+0j
+
+            OFDM_time = np.fft.ifft(OFDM_freq)
+            peak_val = np.max(np.abs(OFDM_time))
+            avg_pwr = np.mean(np.abs(OFDM_time) ** 2)
+            papr_db = 10 * np.log10((peak_val ** 2) / avg_pwr)
+            if papr_db > 9.0:
+                target_ratio = 10 ** (target_papr_db / 10)
+
+                # 1. Run Tone Reservation
+                OFDM_time_TR = tone_reservation(OFDM_time, c_shifts, iteration, target_ratio, steps)
+
+                # 2. Extract the Peak Cancelling Signal (c)
+                # Since Output = Original + c, then c = Output - Original
+                # (Note: Your TR function subtracts, so c will be negative, but magnitude is what matters)
+                peak_cancelling_signal = OFDM_time_TR - OFDM_time
+
+                # Calculate new PAPR
+                peak_val_tr = np.max(np.abs(OFDM_time_TR))
+                avg_pwr_tr = np.mean(np.abs(OFDM_time_TR) ** 2)
+                papr_tr_db = 10 * np.log10((peak_val_tr ** 2) / avg_pwr_tr)
+
+                print(f"Found Symbol #{i}")
+                print(f"Original PAPR: {papr_db:.2f} dB")
+                print(f"New PAPR:      {papr_tr_db:.2f} dB")
+
+                # --- PLOTTING ---
+                plt.figure(figsize=(10, 8))
+
+                # Subplot 1: Original vs Output
+                plt.subplot(2, 1, 1)
+                plt.plot(np.abs(OFDM_time), 'b-', alpha=0.6, label='Original Signal')
+                plt.plot(np.abs(OFDM_time_TR), 'r-', linewidth=1.5, label='Output Signal (with TR)')
+
+                # Draw Threshold Line
+                target_amp = np.sqrt(target_ratio * avg_pwr)
+                plt.axhline(y=target_amp, color='g', linestyle='--', label='Target Threshold')
+
+                plt.title(f'PAPR Reduction: {papr_db:.1f}dB -> {papr_tr_db:.1f}dB')
+                plt.ylabel('Signal Magnitude')
+                plt.legend(loc='upper right')
+                plt.grid(True, alpha=0.3)
+
+                # Subplot 2: The "Noise" we added (Cancelling Signal)
+                plt.subplot(2, 1, 2)
+                plt.plot(peak_cancelling_signal, 'k-', label='Peak Cancelling Signal (c)')
+                plt.title('Peak Cancelling Signal (Generated on Reserved Tones)')
+                plt.xlabel('Time Samples')
+                plt.ylabel('Magnitude')
+                plt.legend(loc='upper right')
+                plt.grid(True, alpha=0.3)
+
+                plt.tight_layout()
+                plt.show()
+
+                break  # Stop after plotting one symbol
+
+            target_ratio = 10 ** (target_papr_db / 10)
+            OFDM_time_TR = tone_reservation(OFDM_time, c_shifts, iteration, target_ratio, steps)
+
+            # calculating new PAPR after TR
+            peak_pwr_tr = np.max(np.abs(OFDM_time_TR) ** 2)
+            avg_pwr_tr = np.mean(np.abs(OFDM_time_TR) ** 2)
+            PAPR_with_TR.append(peak_pwr_tr / avg_pwr_tr)
+
+
+        results[iteration] = PAPR_with_TR
 
 
     PAPR_orig_dB = 10 * np.log10(PAPR_original)
@@ -263,13 +266,13 @@ if __name__ == "__main__":
     plt.xlim((2, 13))
     plt.ylim((10 ** -4, 10 ** 0))
 
-    # colors = ['m', 'c', 'r', 'g', 'k', 'y']
-    # for idx, iteration in enumerate(iterations):
-    #     papr_tr = results[iteration]
-    #     papr_tr_db = 10 * np.log10(papr_tr)
-    #     ccdf_tr = [np.mean(papr_tr_db > t) for t in x_axis]
-    #     color = colors[idx]
-    #     plt.semilogy(x_axis, ccdf_tr, '--', color=color, lw=2, label=f'TR OFDM with iterations={iteration:.0f}')
+    colors = ['m', 'c', 'r', 'g', 'k', 'y']
+    for idx, iteration in enumerate(iterations):
+        papr_tr = results[iteration]
+        papr_tr_db = 10 * np.log10(papr_tr)
+        ccdf_tr = [np.mean(papr_tr_db > t) for t in x_axis]
+        color = colors[idx]
+        plt.semilogy(x_axis, ccdf_tr, '--', color=color, lw=2, label=f'TR OFDM with iterations={iteration:.0f}')
 
     plt.grid(True, which='both')
     plt.xlabel('PAPR0 (dB)')
@@ -312,7 +315,7 @@ if __name__ == "__main__":
         print(f"Target PAPR {target_db:.1f} dB -> Power Penalty {avg_increase_db:.2f} dB")
 
     # Plot 2: Power Penalty
-    # plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(10, 6))
     plt.plot(target_papr_dbs, avg_power_increases, 'bo-', linewidth=2)
     plt.title('Average Power Penalty vs. Target PAPR (Clipping Ratio)')
     plt.xlabel('Target PAPR (dB) [Clipping Ratio]')
@@ -320,3 +323,7 @@ if __name__ == "__main__":
     plt.grid(True, which='both')
     plt.tight_layout()
     plt.show()  # Show both plots now
+
+end = time.time()
+# ~32s
+print(f"\nTotal execution time: {end - start:.2f} seconds")

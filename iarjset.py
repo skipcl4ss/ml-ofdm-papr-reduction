@@ -1,6 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
+import time
+
+start = time.time()
 
 # ==========================================
 # 1. SYSTEM PARAMETERS
@@ -190,37 +193,37 @@ x_orig, y_orig = compute_ccdf(papr_original)
 # 5. VISUALIZATION
 # ==========================================
 
-# # --- Plot 1: Time Domain Signal (Replicating Fig 3 & 4) ---
-# # We take the last iteration's signal for visualization
-# plt.figure(figsize=(10, 6))
-# plt.subplot(3, 1, 1)
-# t = np.arange(len(tx_signal))
-# plt.title('Time Domain OFDM Signal (Original vs Clipped)')
-# plt.plot(t, np.abs(tx_signal), 'b', label='Original OFDM')
-# # To match Fig 3, we show a zoomed or clipped version
-# # Applying CR=4 for visualization
-# # demo_clip = clip_and_filter(tx_signal, 4, N_subcarriers, L_oversampling)
-# [demo_clip_unfiltered, demo_clip] = clip_and_filter(tx_signal, 4, N_subcarriers, L_oversampling)
-# plt.grid(True)
-# plt.ylabel('Amplitude')
-# plt.ylim(0, np.max(np.abs(tx_signal)) * 1.1)
-# plt.subplot(3, 1, 2)
-# plt.plot(t, np.abs(demo_clip_unfiltered), 'g-', linewidth=1, label='Clipped (CR=4)')
-# plt.xlabel('Time')
-# plt.ylabel('Amplitude')
-# plt.legend()
-# plt.grid(True)
-# plt.ylim(0, np.max(np.abs(tx_signal)) * 1.1)
-# plt.axhline(np.max(demo_clip_unfiltered), color='gray', linestyle='--')
-# plt.subplot(3, 1, 3)
-# plt.plot(t, np.abs(demo_clip), 'r--', linewidth=1, label='Clipped (CR=4)')
-# plt.xlabel('Time')
-# plt.ylabel('Amplitude')
-# plt.legend()
-# plt.grid(True)
-# plt.ylim(0, np.max(np.abs(tx_signal)) * 1.1)
-# plt.axhline(np.max(demo_clip_unfiltered), color='gray', linestyle='--')
-# plt.show()
+# --- Plot 1: Time Domain Signal (Replicating Fig 3 & 4) ---
+# We take the last iteration's signal for visualization
+plt.figure(figsize=(10, 6))
+plt.subplot(3, 1, 1)
+t = np.arange(len(tx_signal))
+plt.title('Time Domain OFDM Signal (Original vs Clipped)')
+plt.plot(t, np.abs(tx_signal), 'b', label='Original OFDM')
+# To match Fig 3, we show a zoomed or clipped version
+# Applying CR=4 for visualization
+# demo_clip = clip_and_filter(tx_signal, 4, N_subcarriers, L_oversampling)
+[demo_clip_unfiltered, demo_clip] = clip_and_filter(tx_signal, 4, N_subcarriers, L_oversampling)
+plt.grid(True)
+plt.ylabel('Amplitude')
+plt.ylim(0, np.max(np.abs(tx_signal)) * 1.1)
+plt.subplot(3, 1, 2)
+plt.plot(t, np.abs(demo_clip_unfiltered), 'g-', linewidth=1, label='Clipped (CR=4)')
+plt.xlabel('Time')
+plt.ylabel('Amplitude')
+plt.legend()
+plt.grid(True)
+plt.ylim(0, np.max(np.abs(tx_signal)) * 1.1)
+plt.axhline(np.max(demo_clip_unfiltered), color='gray', linestyle='--')
+plt.subplot(3, 1, 3)
+plt.plot(t, np.abs(demo_clip), 'r--', linewidth=1, label='Clipped (CR=4)')
+plt.xlabel('Time')
+plt.ylabel('Amplitude')
+plt.legend()
+plt.grid(True)
+plt.ylim(0, np.max(np.abs(tx_signal)) * 1.1)
+plt.axhline(np.max(demo_clip_unfiltered), color='gray', linestyle='--')
+plt.show()
 # --- Plot 2: CCDF Curves (Replicating Fig 5) ---
 plt.figure(figsize=(10, 7))
 
@@ -299,3 +302,7 @@ for cr in CR_values:
     if cr == 3: print(f"  -> Simulated: {val_cr:.3f} dB | Paper: ~3.279 dB")
 
 plt.show()
+
+end = time.time()
+# ~1s
+print(f"\nTotal execution time: {end - start:.2f} seconds")

@@ -11,7 +11,7 @@ L = 8
 N_fft = N * L
 CP = 32
 iterations = 10000
-clipping_ratios = [0.8, 1.0, 1.2, 1.4, 1.6]
+# clipping_ratios = [0.8, 1.0, 1.2, 1.4, 1.6]
 clipping_ratios = [10 ** (1/10), 10 ** (3/10), 10 ** (5/10), 10 ** (7/10)]
 
 
@@ -113,4 +113,5 @@ plt.tight_layout()
 plt.show()
 
 end = time.time()
+# ~7s
 print(f"\nTotal execution time: {end - start:.2f} seconds")

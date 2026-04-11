@@ -2,6 +2,9 @@ import sys
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy.special import erfc
+import time
+
+start = time.time()
 
 def addCP(OFDM_time):
     cp = OFDM_time[-CP:]               # take the last CP samples ...
@@ -206,7 +209,7 @@ if __name__ == "__main__":
     plt.figure()
     plt.semilogy(Eb_No_dB, BER, 'bo-', label='Simulated BER')
     plt.semilogy(Eb_No_dB, BER_theoretical, 'r--', label='Theoretical BER')
-    plt.title(f"Bit Error Rate (BER) vs SNR ({modulation_type})")
+    plt.title(f"Bit Error Rate (BER) vs SNR ({modulation_type}) (idk.py)")
     plt.xlabel("Eb/No (dB)")
     plt.ylabel("BER")
     plt.grid(True, which='both', alpha=0.5)
@@ -214,3 +217,6 @@ if __name__ == "__main__":
     plt.legend()
     plt.tight_layout()
     plt.show()
+
+end = time.time()
+print(f"\nTotal execution time: {end - start:.2f} seconds")

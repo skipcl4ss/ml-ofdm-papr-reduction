@@ -13,6 +13,9 @@ Includes:
 import numpy as np
 import matplotlib.pyplot as plt
 from math import erfc
+import time
+
+start = time.time()
 
 #############################
 # Modulation / Demodulation #
@@ -21,22 +24,18 @@ from math import erfc
 def qam_mod(bits, M):
     k = int(np.log2(M))
     assert bits.size % k == 0
-    symbols = []
-    bit_groups = bits.reshape((-1, k))
+    bit_groups = bits.reshape((-1, k)).astype(np.int64, copy=False)
 
     m_side = int(np.sqrt(M))
     assert m_side*m_side == M
     levels = np.arange(m_side)*2 - (m_side-1)
 
-    for bg in bit_groups:
-        i_bits = bg[:k//2]
-        q_bits = bg[k//2:]
-        i = int("".join(map(str,i_bits)), 2)
-        q = int("".join(map(str,q_bits)), 2)
-        sym = levels[i] + 1j*levels[q]
-        symbols.append(sym)
+    half = k // 2
+    weights = (1 << np.arange(half - 1, -1, -1, dtype=np.int64))
+    i_idx = bit_groups[:, :half] @ weights
+    q_idx = bit_groups[:, half:] @ weights
+    symbols = levels[i_idx] + 1j * levels[q_idx]
 
-    symbols = np.array(symbols)
     symbols /= np.sqrt(np.mean(np.abs(symbols)**2))
     return symbols
 
@@ -51,14 +50,14 @@ def qam_demod(symbols, M):
     norm = np.sqrt(np.mean(np.abs(grid)**2))
     symbols = symbols * norm
 
-    bits = []
-    for s in symbols:
-        i_idx = np.argmin(np.abs(np.real(s)-levels))
-        q_idx = np.argmin(np.abs(np.imag(s)-levels))
-        ib = list(map(int, np.binary_repr(i_idx, width=k//2)))
-        qb = list(map(int, np.binary_repr(q_idx, width=k//2)))
-        bits.extend(ib+qb)
-    return np.array(bits)
+    i_idx = np.argmin(np.abs(np.real(symbols)[:, None] - levels[None, :]), axis=1)
+    q_idx = np.argmin(np.abs(np.imag(symbols)[:, None] - levels[None, :]), axis=1)
+
+    half = k // 2
+    shifts = np.arange(half - 1, -1, -1, dtype=np.int64)
+    i_bits = ((i_idx[:, None] >> shifts) & 1)
+    q_bits = ((q_idx[:, None] >> shifts) & 1)
+    return np.concatenate([i_bits, q_bits], axis=1).reshape(-1)
 
 #########################
 # OFDM Mod/Demod + PAPR #
@@ -69,31 +68,23 @@ def ofdm_mod(symbols, N, cp_len):
     padded = np.zeros(num_ofdm*N, dtype=complex)
     padded[:len(symbols)] = symbols
 
-    out = []
-    papr_vals = []
+    blocks = padded.reshape(num_ofdm, N)
+    x = np.fft.ifft(blocks, axis=1) * np.sqrt(N)
+    cp = x[:, -cp_len:]
+    out = np.concatenate([cp, x], axis=1)
 
-    for i in range(num_ofdm):
-        block = padded[i*N:(i+1)*N]
-        x = np.fft.ifft(block)*np.sqrt(N)
-        cp = x[-cp_len:]
-        s = np.concatenate([cp,x])
-        out.append(s)
+    power = np.abs(x) ** 2
+    papr_vals = 10 * np.log10(np.max(power, axis=1) / np.mean(power, axis=1))
 
-        power = np.abs(x)**2
-        papr_vals.append(10*np.log10(np.max(power)/np.mean(power)))
-
-    return np.concatenate(out), num_ofdm, papr_vals
+    return out.reshape(-1), num_ofdm, papr_vals.tolist()
 
 
 def ofdm_demod(rx, N, cp_len, num_ofdm):
-    out = []
-    L = N+cp_len
-    for i in range(num_ofdm):
-        blk = rx[i*L:(i+1)*L]
-        x = blk[cp_len:]
-        fd = np.fft.fft(x)/np.sqrt(N)
-        out.append(fd)
-    return np.concatenate(out)
+    L = N + cp_len
+    rx_blocks = rx[:num_ofdm * L].reshape(num_ofdm, L)
+    x = rx_blocks[:, cp_len:]
+    fd = np.fft.fft(x, axis=1) / np.sqrt(N)
+    return fd.reshape(-1)
 
 #############
 # Channel   #
@@ -164,7 +155,9 @@ if __name__ == '__main__':
 
     rate = k * (N/(N+cp_len))
 
+    print("Starting loop")
     for ebno_db in ebno_db_range:
+        print(f"Iteration {ebno_db // 2 + 1}")
         snr_db = ebno_db + 10*np.log10(rate)
         rx_time = awgn(tx_time, snr_db)
         rx_syms = ofdm_demod(rx_time, N, cp_len, num_ofdm)
@@ -179,7 +172,7 @@ if __name__ == '__main__':
     plt.grid(True,which='both')
     plt.xlabel('Eb/N0 (dB)')
     plt.ylabel('BER')
-    plt.title(f'BER vs Eb/N0, {M}-QAM OFDM')
+    plt.title(f'BER vs Eb/N0, {M}-QAM OFDM (ofdm.py)')
     plt.legend()
     plt.show()
 
@@ -211,3 +204,7 @@ if __name__ == '__main__':
     plt.title('PAPR CCDF Curve (ofdm.py)')
     plt.legend()
     plt.show()
+
+end = time.time()
+# ~139s
+print(f"\nTotal execution time: {end - start:.2f} seconds")
