@@ -1,6 +1,5 @@
 import numpy as np
 
-# ! takes a transmitted signal, applies noise, and outputs a received signal
 def awgn(tx_signal, SNR_dB):
     """Adds AWGN to a complex signal given a target SNR in dB."""
     # Calculate average signal power

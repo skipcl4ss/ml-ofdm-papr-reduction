@@ -1,12 +1,12 @@
 import numpy as np
-from scipy import signal
+from ofdm.modem import qam16_mod, qpsk_mod
+from ofdm.candf import clip_time, oversample_time
 from ofdm.metrics import calculate_papr, calculate_cm
-from ofdm.modem import qam16_mod, qpsk_mod, QAMModem
-from ofdm.candf import clip_time
 from ofdm.ccdf import plot_ccdf_compare, plot_ccdf
 from nnicf import NNICFMapper, normalize
-import time
 import torch
+from scipy import signal
+import time
 
 start = time.time()
 
@@ -15,7 +15,7 @@ N = 256                 # Number of Subcarriers
 mid = N // 2
 L = 4                   # Oversampling Factor
 N_fft = N * L           # IFFT Size (extended to 1024)
-# CP = 32                 # Cyclic Prefix
+# ? is CP only needed in ber
 CP = N // 4             # Cyclic Prefix
 samples_per_L = 10000   # High value to capture the CCDF tail
 cr_dB = 6
@@ -24,9 +24,9 @@ iterations = 3
 
 # modulation scheme
 mod = "16qam"
+M = 16
 # mod = "qpsk"
-# M = 16
-# qam_modem = QAMModem(M)
+# M = 4
 
 # Hyperparameters (used only in saving and loading files, not in the actual C&F process)
 lr = 0.001
@@ -50,27 +50,27 @@ iterations_cm = [[] for _ in range(iterations)]
 
 tx_time, rx_time = [[], []], [[], []]
 for _ in range(samples_per_L):
+    tx_data = np.random.randint(0, M, N)
     if mod == "16qam":
         # Generate 16-QAM Symbols
-        tx_data = np.random.randint(0, 16, N)
-        symbols = qam16_mod(tx_data)
-        # symbols = qam_modem.modulate(tx_data)
+        tx_symbols = qam16_mod(tx_data)
     elif mod == "qpsk":
         # Generate QPSK Symbols
-        tx_data = np.random.randint(0, 4, N)
-        symbols = qpsk_mod(tx_data)
+        tx_symbols = qpsk_mod(tx_data)
 
-    # todo: use candf.py
-    # Oversampling via Spectral Centering (Crucial for hitting 14dB)
-    symbols_oversampled = np.zeros(N_fft, dtype=np.complex64)
-    symbols_oversampled[:mid] = symbols[:mid]
-    symbols_oversampled[-mid:] = symbols[mid:]
+    # done: use candf.py
+    # # Oversampling via Spectral Centering (Crucial for hitting 14dB)
+    # tx_symbols_oversampled = np.zeros(N_fft, dtype=np.complex64)
+    # tx_symbols_oversampled[:mid] = tx_symbols[:mid]
+    # tx_symbols_oversampled[-mid:] = tx_symbols[mid:]
+    #
+    # # IFFT to Time Domain (Capturing true analog peaks)
+    # # Scale by L to maintain power through the zero-padded IFFT
+    # x_time = (np.fft.ifft(tx_symbols_oversampled) * L).astype(np.complex64)
 
-    # IFFT to Time Domain (Capturing true analog peaks)
-    # Scale by L to maintain power through the zero-padded IFFT
-    x_time = (np.fft.ifft(symbols_oversampled) * L).astype(np.complex64)
+    x_time = oversample_time(tx_symbols, N, L)
 
-    # ! separately store real and imag parts (needed for the NN model)
+    # separately store real and imag parts (needed for NN model plotting)
     tx_time[0].append(np.real(x_time).astype(np.float32, copy=False))
     tx_time[1].append(np.imag(x_time).astype(np.float32, copy=False))
 
@@ -79,22 +79,22 @@ for _ in range(samples_per_L):
     cm_unclipped.append(calculate_cm(x_time))
 
     # Process C&F
-    x_current = x_time
     for i in range(iterations):
-        x_clipped = clip_time(x_current, cr)
+        x_clipped = clip_time(x_time, cr)
 
+        # todo: experiment with clip_and_filter_ofdm()
         # Filtering: use lfilter (or filtfilt for zero-phase)
-        x_current = signal.lfilter(b, a, x_clipped).astype(np.complex64)
-        # x_current = signal.filtfilt(b, a, x_clipped)
+        x_time = signal.lfilter(b, a, x_clipped).astype(np.complex64)
+        # x_time = signal.filtfilt(b, a, x_clipped)
 
         # Store PAPR of the current iterative result
-        iterations_papr[i].append(calculate_papr(x_current))
-        iterations_cm[i].append(calculate_cm(x_current))
+        iterations_papr[i].append(calculate_papr(x_time))
+        iterations_cm[i].append(calculate_cm(x_time))
 
-        # ! store the final iteration's real and imag parts separately
+        # store the final iteration's real and imag parts separately
         if i == iterations - 1:
-            rx_time[0].append(np.real(x_current).astype(np.float32, copy=False))
-            rx_time[1].append(np.imag(x_current).astype(np.float32, copy=False))
+            rx_time[0].append(np.real(x_time).astype(np.float32, copy=False))
+            rx_time[1].append(np.imag(x_time).astype(np.float32, copy=False))
 tx_time = np.array(tx_time, dtype=np.float32)
 rx_time = np.array(rx_time, dtype=np.float32)
 
@@ -121,6 +121,7 @@ with torch.no_grad():
     predicted_real = NN_Mod_Re(tx_real).numpy()
     predicted_imag = NN_Mod_Im(tx_imag).numpy()
 
+# todo: denormalize before recombining
 # 4. Reconstruct the Complex OFDM Signals
 # each has length of samples_per_L
 predicted_complex = predicted_real + 1j * predicted_imag
@@ -140,7 +141,7 @@ labels = ['Original OFDM', f'Clipped OFDM ({iterations} iterations)', 'NNICF Pre
 plot_ccdf_compare([papr_unclipped, iterations_papr[-1], pred_papr], f"Original vs Clipped vs {title}", labels)
 plot_ccdf_compare([cm_unclipped, iterations_cm[-1], pred_cm], f"Original vs Clipped vs {title}", labels, metric="CM")
 
-y_axis = np.arange(samples_per_L, 0, -1) / samples_per_L # ? why dont we use the theoretical CCDF function
+y_axis = np.arange(samples_per_L, 0, -1) / samples_per_L
 papr_floor = np.where(y_axis == 1e-4)[0]
 papr_vlines = [np.sort(papr_unclipped)[papr_floor], np.sort(iterations_papr[-1])[papr_floor]]
 plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines)
@@ -154,4 +155,5 @@ plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
 # plot_ccdf_compare([cm_unclipped, *iterations_cm], label=labels, metric="cm")
 
 end = time.time()
+# ~8s
 print(f"\nTotal execution time: {end - start:.2f} seconds")

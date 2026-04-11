@@ -7,6 +7,7 @@ import torch.nn as nn
 torch.set_num_threads(8)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# todo: make a denormalize function
 def normalize(X_raw, Y_raw, part):
     # 1. Extract Real or Imaginary
     if part == "real":

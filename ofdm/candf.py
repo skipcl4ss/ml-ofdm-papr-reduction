@@ -1,4 +1,5 @@
 import numpy as np
+from ofdm.awgn import awgn
 
 def clip_time(tx_time, CR):
     """
@@ -11,8 +12,25 @@ def clip_time(tx_time, CR):
     phase = np.angle(tx_time)
     rms = np.sqrt(np.mean(mag ** 2))
     A = CR * rms
-    clipped = np.where(mag <= A, tx_time, A * np.exp(1j * phase)) # ? why
+    clipped = np.where(mag <= A, tx_time, A * np.exp(1j * phase)) # ? why the phase
     return clipped
+
+def oversample_time(freq_symbols, N, L):
+    # build oversampled frequency vector (zero padding in middle)
+    mid = N // 2
+    zeros = np.zeros((L - 1) * N)
+    oversampled_freq = np.concatenate([freq_symbols[:mid], zeros, freq_symbols[mid:]], dtype=np.complex64)
+    # time domain oversampled signal (original)
+    tx_time_oversampled = np.fft.ifft(oversampled_freq) * L
+    return tx_time_oversampled
+
+def emulate_awgn_channel(tx_time, CP, SNR_dB):
+    # Downsample back to original rate (take every L-th sample)
+    tx_signal = np.concatenate([tx_time[-CP:], tx_time])
+    rx_signal = awgn(tx_signal, SNR_dB)
+    rx_ofdm = rx_signal[CP:]
+    rx_symbols = np.fft.fft(rx_ofdm)
+    return rx_symbols
 
 def clip_and_filter_ofdm(freq_symbols, N, L, CR):
     """
@@ -27,12 +45,13 @@ def clip_and_filter_ofdm(freq_symbols, N, L, CR):
     """
     # build oversampled frequency vector (zero padding in middle)
     mid = N // 2
-    zeros = np.zeros((L - 1) * N, dtype=complex)
-    # bits_per_symbol = int(len(freq_symbols) // N)
-    # zeros = np.zeros((L - 1) * N * bits_per_symbol, dtype=complex)
-    oversampled_freq = np.concatenate([freq_symbols[:mid], zeros, freq_symbols[mid:]])
-    # time domain oversampled signal (original)
-    tx_time_oversampled = np.fft.ifft(oversampled_freq)
+    # zeros = np.zeros((L - 1) * N, dtype=complex)
+    # # bits_per_symbol = int(len(freq_symbols) // N)
+    # # zeros = np.zeros((L - 1) * N * bits_per_symbol, dtype=complex)
+    # oversampled_freq = np.concatenate([freq_symbols[:mid], zeros, freq_symbols[mid:]])
+    # # time domain oversampled signal (original)
+    # tx_time_oversampled = np.fft.ifft(oversampled_freq) * L
+    tx_time_oversampled = oversample_time(freq_symbols, N, L)
     # soft clipping (no filtering)
     clipped_time = clip_time(tx_time_oversampled, CR)
     # freq domain of clipped signal
@@ -45,20 +64,7 @@ def clip_and_filter_ofdm(freq_symbols, N, L, CR):
     # kept_freq[-(N-mid):] = clipped_freq[-(N-mid):]
     # IFFT to get clipped+filtered time signal
     clipped_filtered_time = np.fft.ifft(kept_freq)
-    # qam16_mod / qam_modem
-    # print("clip_and_filter_ofdm() start")
-    # print("freq_symbols", freq_symbols.shape) # N * log2(M) / N
-    # print("zeros", zeros.shape) # N * log2(M) * (bits_per_symbol - 1) / N * (L - 1)
-    # print("oversampled_freq", oversampled_freq.shape) # N * log2(M) * (bits_per_symbol - 1) / N * L
-    # print(np.fft.ifft(oversampled_freq, N).shape) # N
-    # print(np.fft.ifft(oversampled_freq).shape) # N * log2(M) / N * L
-    # print("tx_time_oversampled", tx_time_oversampled.shape) # N * log2(M) * (bits_per_symbol - 1) / N * L
-    # print("clipped_time", clipped_time.shape) # N * log2(M) * (bits_per_symbol - 1) / N * L
-    # print(np.fft.fft(clipped_time, N).shape) #  / N
-    # print(np.fft.fft(clipped_time).shape) #  / N * L
-    # print("clipped_freq", clipped_freq.shape) # N * log2(M) * (bits_per_symbol - 1) / N * L
-    # print("kept_freq", kept_freq.shape) # N * log2(M) * (bits_per_symbol - 1) / N * L
-    # print("clip_and_filter_ofdm() end")
 
     return clipped_filtered_time
+    # ! good idea yet not very helpful
     # return tx_time_oversampled, clipped_time, clipped_filtered_time

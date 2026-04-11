@@ -207,7 +207,7 @@ def soft_clip_time(tx_time, CR):
     A = CR * rms
     mag = np.abs(tx_time)
     phase = np.angle(tx_time)
-    clipped = np.where(mag <= A, tx_time, A * np.exp(1j * phase)) # ? why
+    clipped = np.where(mag <= A, tx_time, A * np.exp(1j * phase))
     return clipped
 
 def clip_and_filter_ofdm(freq_symbols, N, L=4, CR=2.23):
@@ -244,7 +244,7 @@ def clip_and_filter_ofdm(freq_symbols, N, L=4, CR=2.23):
     # return tx_time_oversampled, clipped_time, clipped_filtered_time
 
 # ----------------- Parameter input (kept interactive like original) -----------------
-# # takes input from users
+# ! takes input from users
 def param():
     print("Enter the OFDM Parameters")
     # This block asks the user for as integer as the number of subcarriers, then calculates the cyclic prefix from it

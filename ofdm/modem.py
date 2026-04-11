@@ -6,6 +6,7 @@ qam16_mapping  =  np.array([-3-3j, -3-1j, -3+3j, -3+1j,
                             +3-3j,  3-1j,  3+3j,  3+1j,
                             +1-3j,  1-1j,  1+3j,  1+1j])
 
+# todo: not sure if the indexing is accurate
 # Gray mapping: 00,01,11,10 -> 1+1j, 1-1j, -1-1j, -1+1j
 qpsk_mapping  =   np.array([+1+1j,  1-1j,
                             -1-1j, -1+1j])
@@ -37,7 +38,8 @@ def qpsk_mod(data):
     # Normalize average power to 1 (each raw symbol has power 2)
     return symbols / np.sqrt(2)
 
-# todo: needs revision, as i just copied the qam16_demod and changed accordingly
+# done: apparently is correct, even tho i just copied qam16_demod and changed accordingly
+# todo: there may be a problem with mapping tho
 def qpsk_demod(rx_symbols):
     """Takes noisy 16-QPSK symbols and returns the most likely integers (0-3)."""
     # 1. Un-normalize the received symbols back to the original grid

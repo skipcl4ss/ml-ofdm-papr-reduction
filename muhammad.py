@@ -315,7 +315,7 @@ def soft_clip_time(tx_time, CR):
     A = CR * rms
     mag = np.abs(tx_time)
     phase = np.angle(tx_time)
-    clipped = np.where(mag <= A, tx_time, A * np.exp(1j * phase)) # ? why
+    clipped = np.where(mag <= A, tx_time, A * np.exp(1j * phase))
     return clipped
 
 def clip_and_filter_ofdm(freq_symbols, N, L=4, CR=2.23):

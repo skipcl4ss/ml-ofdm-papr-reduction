@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 def theoretical_ccdf(N, papr_dB_range):
     # CDF = (1 - e^(-z^2)) ^ N
     # CCDF = 1 - CDF
+    # ? i assume z = papr_dB_range / 20
     gamma = 10 ** (papr_dB_range / 10) # ? is this z^2
     ccdf = 1 - (1 - np.exp(-gamma)) ** N
     return ccdf
@@ -30,21 +31,20 @@ def plot_formatting(title_suffix='', metric='PAPR', vlines=None):
     plt.grid(True, which='both')
     plt.axhline(y=1e-1, color='gray', linestyle=':')
     plt.axhline(y=1e-2, color='gray', linestyle=':')
-    # plt.axhline(y=1e-4, color='gray', linestyle=':')
     plt.legend(loc='lower left')
     # plt.tight_layout()
 
-def plot_ccdf(val_dict, title_suffix='', label=None, metric='PAPR', vlines=None, save=False):
+def plot_ccdf(vals, title_suffix='', label=None, metric='PAPR', vlines=None, save=False):
     plt.figure(figsize=(10, 7))
-    sorted_vals = np.sort(val_dict)
+    sorted_vals = np.sort(vals)
     y_axis = np.arange(len(sorted_vals), 0, -1) / len(sorted_vals) # ? why dont we use the theoretical CCDF function
     # y_axis = 1 + 1 / len(sorted_vals) - np.arange(1, len(sorted_vals) + 1) / len(sorted_vals) # ! this line is essentially the same as the one above, but in the format of the one below
     # y_axis = 1 - np.arange(1, len(sorted_vals) + 1) / len(sorted_vals) # ? why not this
 
     # Clipped (no filtering) -> keep solid; Clipped + Filtered -> dashed; others default solid
-    plt.semilogy(sorted_vals, y_axis, linewidth=2, label=label if label else title_suffix)
+    plt.semilogy(sorted_vals, y_axis, linewidth=2, label=label)
 
-    # all_data = np.concatenate([v for v in val_dict if v.size > 0]) if val_dict else np.array([])
+    # all_data = np.concatenate([v for v in vals if v.size > 0]) if vals else np.array([])
     # if all_data.size > 0:
     #     x_theory = np.linspace(np.min(all_data), np.max(all_data) + 2, 200)
     #     y_theory = theoretical_ccdf(N, x_theory)
@@ -68,9 +68,9 @@ def plot_ccdf(val_dict, title_suffix='', label=None, metric='PAPR', vlines=None,
 def plot_ccdf_compare(val_dict, title_suffix='', label=None, metric='PAPR', vlines=None, save=False):
     plt.figure(figsize=(10, 7))
     # colors = cm.viridis(np.linspace(0, 0.9, len(val_dict)))
-    for i, idx in enumerate(val_dict):
-        sorted_vals = np.sort(idx)
-        y_axis = np.arange(len(sorted_vals), 0, -1) / len(sorted_vals)  # ? why dont we use the theoretical CCDF function
+    for i, vals in enumerate(val_dict):
+        sorted_vals = np.sort(vals)
+        y_axis = np.arange(len(sorted_vals), 0, -1) / len(sorted_vals)
 
         # Clipped (no filtering) -> keep solid; Clipped + Filtered -> dashed; others default
         # todo: edit the function so that it takes labels as input

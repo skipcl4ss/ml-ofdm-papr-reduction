@@ -19,12 +19,13 @@ input_features = 256 * 4
 # Modulation scheme
 mod = "16qam"
 # mod = "qpsk"
-print(f"Using {mod.upper()} modulation technique)")
+print(f"Using {mod.upper()} modulation technique")
 
 # Hyperparameters
 epochs = 100
 lr = 0.001 # originally 0.001
 lr_str = "dot" + str(lr).split(".")[1]
+print(f"Hyperparameters: epochs = {epochs}, learning rate = {lr} ({lr_str} used in naming files), batch size = None (for now)")
 
 # Data splitting
 train_size = 80
@@ -34,9 +35,20 @@ if train_size < 100:
     one_batch = None
 elif train_size == 100:
     one_batch = "00"
+print(f"dataset is split into {train_size} training files and {test_size} batches ({train_test_str} used in naming files, while {one_batch} is the index of used batch if testing on 1 batch)")
+if train_size == 100:
+    print("This 1 batch is of index 00, and was already used in training")
 
 batch_suffix = f" (Batch #{one_batch})" if one_batch else ""
 params = f"{mod.upper()} lr = {lr} ({train_size} Training/{test_size if not one_batch else 1} Testing){batch_suffix}"
+print(params)
+#%%
+# Explicitly tell PyTorch to utilize your 8 CPU cores for matrix math
+# Check for GPU availability to drastically speed up training
+# ! cuda is available only on nvidia gpu
+torch.set_num_threads(8)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"PyTorch using {torch.get_num_threads()} threads on {device}")
 
 # -----------------------------------------------------------------------------
 
@@ -56,6 +68,11 @@ class FastOFDMDataset(Dataset):
 
 # -----------------------------------------------------------------------------
 
+# Standard Mean Squared Error loss
+criterion = nn.MSELoss()
+
+# -----------------------------------------------------------------------------
+
 # 1. Load the Saved Models
 Test_Mod_Re = NNICFMapper(input_features).to(device)
 Test_Mod_Im = NNICFMapper(input_features).to(device)
@@ -65,45 +82,6 @@ Test_Mod_Im.load_state_dict(torch.load(f"./trained_models/{mod}_mod_im_weights_{
 
 Test_Mod_Re.eval()
 Test_Mod_Im.eval()
-
-# -----------------------------------------------------------------------------
-
-# --- Configuration ---
-# The path where 100 .pt files are saved!
-file_directory = "./data_pt/"
-
-# Initialize DataLoaders with asynchronous loading (num_workers) and rapid memory transfer
-train_dataset_real = FastOFDMDataset(file_directory, part='real')
-if train_size < 100:
-    train_dataset_real = Subset(train_dataset_real, range(train_size))  # Use the first train_size files for training
-train_loader_real = DataLoader(
-    train_dataset_real,
-    batch_size=None, # batch_size is None because the dataset returns a full batch of 10,000
-    shuffle=True,
-    # ! does not work locally on windows for some reason
-    num_workers=0,   # Adjust between 2-4 based on your CPU cores
-    pin_memory=torch.cuda.is_available()
-)
-
-train_dataset_imag = FastOFDMDataset(file_directory, part='imag')
-if train_size < 100:
-    train_dataset_imag = Subset(train_dataset_imag, range(train_size))  # Use the first train_size files for training
-train_loader_imag = DataLoader(
-    train_dataset_imag,
-    batch_size=None,
-    shuffle=True,
-    num_workers=0,
-    pin_memory=torch.cuda.is_available()
-)
-
-# Initialize models and send them to the GPU/device
-Mod_Re_NN = NNICFMapper(input_features).to(device)
-Mod_Im_NN = NNICFMapper(input_features).to(device)
-
-# Standard Mean Squared Error loss and Adam optimizer
-criterion = nn.MSELoss()
-optimizer_real = optim.Adam(Mod_Re_NN.parameters(), lr=lr)
-optimizer_imag = optim.Adam(Mod_Im_NN.parameters(), lr=lr)
 
 # -----------------------------------------------------------------------------
 
@@ -117,6 +95,7 @@ if one_batch:
         predicted_real = Test_Mod_Re(test_X_real).numpy()
         predicted_imag = Test_Mod_Im(test_X_imag).numpy()
 
+    # todo: denormalize before recombining
     # 4. Reconstruct the Complex OFDM Signals
     original_complex = test_X_real.numpy() + 1j * test_X_imag.numpy()
     clipped_complex = test_Y_real.numpy() + 1j * test_Y_imag.numpy()
@@ -141,7 +120,7 @@ elif train_size < 100:
             X_real, X_imag = X_real.to(device), X_imag.to(device)
 
             # Predict
-            # ! Raises an error when when using .numpy()
+            # fixme: raises an error when when using .numpy()
             # pred_real = Test_Mod_Re(X_real).numpy()
             # pred_imag = Test_Mod_Im(X_imag).numpy()
             pred_real = Test_Mod_Re(X_real)
@@ -154,6 +133,7 @@ elif train_size < 100:
             test_loss_real += loss_real.item()
             test_loss_imag += loss_imag.item()
 
+            # todo: denormalize before recombining
             # Reconstruct complex signals
             orig_complex = X_real.numpy() + 1j * X_imag.numpy()
             clip_complex = Y_real.numpy() + 1j * Y_imag.numpy()
@@ -204,10 +184,10 @@ labels = ['Original OFDM', 'Clipped OFDM', 'NNICF Predicted OFDM']
 plot_ccdf_compare([orig_papr, clip_papr, pred_papr], f"Original vs Clipped vs {title}", labels)
 plot_ccdf_compare([orig_cm, clip_cm, pred_cm], f"Original vs Clipped vs {title}", labels, metric="CM")
 
-
+# todo: find a way to embed the floor part into the plotting function
 # todo: find an appropriate naming for the 10k
 y_axis_len = test_size * 10000 if not one_batch else 10000
-y_axis = np.arange(y_axis_len, 0, -1) / y_axis_len # ? why dont we use the theoretical CCDF function
+y_axis = np.arange(y_axis_len, 0, -1) / y_axis_len
 papr_floor = np.where(y_axis == 1e-4)[0]
 cm_floor = np.where(y_axis == 1e-3)[0]
 
@@ -220,4 +200,6 @@ cm_vlines = [np.sort(orig_cm)[cm_floor], np.sort(clip_cm)[cm_floor]]
 plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
 
 end = time.time()
+# ~98s at test_size = 20
+# ~6s at one_batch != None
 print(f"\nTotal execution time: {end - start:.2f} seconds")

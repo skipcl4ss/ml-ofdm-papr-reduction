@@ -1,7 +1,6 @@
 import numpy as np
 from scipy.special import erfc
 
-# ! calculates theoretical BER at each Eb/No given the modulation type
 def ber_theoretical(EbNo_dB, M):
     EbNo_lin = 10 ** (EbNo_dB / 10)
 
