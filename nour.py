@@ -1,9 +1,11 @@
 import sys
-
 import numpy as np
 import komm
 from matplotlib import pyplot as plt
 from scipy.special import erfc
+import time
+
+start = time.time()
 
 def addCP(OFDM_time):
     cp = OFDM_time[-CP:]               # take the last CP samples ...
@@ -113,7 +115,7 @@ if __name__ == "__main__":
             OFDM_RX = awgn.transmit(OFDM_TX)
 
 
-            # plotting TX and RX signal power
+            # # plotting TX and RX signal power
             # plt.figure(figsize=(8, 2))
             # plt.plot(abs(OFDM_TX), label='TX signal')
             # plt.plot(abs(OFDM_RX), label='RX signal')
@@ -185,7 +187,7 @@ if __name__ == "__main__":
     plt.figure()
     plt.semilogy(Eb_No_dB, BER, 'bo-', label='Simulated BER')
     plt.semilogy(Eb_No_dB, BER_theoretical, 'r--', label='Theoretical BER')
-    plt.title("Bit Error Rate (BER) vs SNR")
+    plt.title("Bit Error Rate (BER) vs SNR (testnour.py)")
     plt.xlabel("Eb/No")
     plt.ylabel("BER")
     plt.xlim(-20, 15)
@@ -193,3 +195,7 @@ if __name__ == "__main__":
     plt.grid(True, which='both')
     plt.legend()
     plt.show()
+
+end = time.time()
+# ~85s
+print(f"\nTotal execution time: {end - start:.2f} seconds")
