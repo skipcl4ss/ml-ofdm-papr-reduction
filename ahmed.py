@@ -5,10 +5,10 @@ from scipy.special import erfc
 import matplotlib.cm as cm
 import time
 
-# start = time.time()
-# inp = 0
-# ber_time = 0
-# ccdf_time = 0
+start = time.time()
+inp = 0
+ber_time = 0
+ccdf_time = 0
 
 # ----------------- Modems (PSK and QAM) -----------------
 class PSKModem:
@@ -439,7 +439,7 @@ def main():
 
     plt.xlabel('SNR [dB]', fontsize=12)
     plt.ylabel('BER', fontsize=12)
-    plt.title(f'BER vs SNR - {p["mod_str"]} with Clipping (L={L})', fontsize=14)
+    plt.title(f'BER vs SNR - {p["mod_str"]} with Clipping (L={L}) (ahmed.py)', fontsize=14)
     plt.grid(True, which='both', linestyle='--', alpha=0.6)
     plt.legend(fontsize=9, loc='best', ncol=2)
     plt.xlim([p["EbNo_range"][0], p["EbNo_range"][-1]])
@@ -534,9 +534,10 @@ def main():
 if __name__ == "__main__":
     main()
 
-# end = time.time()
-# # fixme: time variable have a value of zero when used outside a function
-# print(start, inp, ber_time, ccdf_time, end) # ! inp, ber_time, and ccdf_time are zero
-# print(f"\ninput done in {inp - start:.2f} seconds.")
-# print(f"\nCCDF simulation done in {end - ber_time:.2f} seconds.")
-# print(f"\nTotal execution time: {end - start:.2f} seconds")
+end = time.time()
+# ~84s
+# fixme: time variable have a value of zero when used outside a function
+print(start, inp, ber_time, ccdf_time, end) # ! inp, ber_time, and ccdf_time are zero
+print(f"\ninput done in {inp - start:.2f} seconds.")
+print(f"\nCCDF simulation done in {end - ber_time:.2f} seconds.")
+print(f"\nTotal execution time: {end - start:.2f} seconds")

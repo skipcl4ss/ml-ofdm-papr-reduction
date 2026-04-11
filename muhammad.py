@@ -4,6 +4,9 @@ from scipy.signal import firwin, lfilter
 from scipy.special import erfc
 import matplotlib.cm as cm
 import sys
+import time
+
+start = time.time()
 
 # # clipping.py
 
@@ -701,3 +704,7 @@ if __name__ == "__main__":
     clipping()
     # ahmed()
     # shorter()
+
+end = time.time()
+# ? idk tbf
+print(f"\nTotal execution time: {end - start:.2f} seconds")
