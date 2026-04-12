@@ -10,7 +10,7 @@ def theoretical_ccdf(N, papr_dB_range):
     ccdf = 1 - (1 - np.exp(-gamma)) ** N
     return ccdf
 
-def plot_formatting(title_suffix='', metric='PAPR', vlines=None):
+def plot_formatting(title='', metric='PAPR', vlines=None):
     if metric.lower() == 'papr':
         # plt.xlim([4, 12])
         plt.xlabel('PAPR$_0$ [dB]')
@@ -27,14 +27,14 @@ def plot_formatting(title_suffix='', metric='PAPR', vlines=None):
         for vline in vlines:
             plt.axvline(x=vline, color='gray', linestyle=':')
 
-    plt.title(title_suffix)
+    plt.title(title)
     plt.grid(True, which='both')
     plt.axhline(y=1e-1, color='gray', linestyle=':')
     plt.axhline(y=1e-2, color='gray', linestyle=':')
     plt.legend(loc='lower left')
     # plt.tight_layout()
 
-def plot_ccdf(vals, title_suffix='', label=None, metric='PAPR', vlines=None, save=False):
+def plot_ccdf(vals, title='', label=None, metric='PAPR', vlines=None, save=False):
     plt.figure(figsize=(10, 7))
     sorted_vals = np.sort(vals)
     y_axis = np.arange(len(sorted_vals), 0, -1) / len(sorted_vals) # ? why dont we use the theoretical CCDF function
@@ -60,12 +60,12 @@ def plot_ccdf(vals, title_suffix='', label=None, metric='PAPR', vlines=None, sav
     elif metric.lower() == "cm":
         plt.axvline(x=2.5, color='gray', linestyle=':')
         plt.axvline(x=6, color='gray', linestyle=':')
-    plot_formatting(title_suffix, metric, vlines)
+    plot_formatting(title, metric, vlines)
     if save:
         plt.savefig(save, dpi=150)
     plt.show()
 
-def plot_ccdf_compare(val_dict, title_suffix='', label=None, metric='PAPR', vlines=None, save=False):
+def plot_ccdf_compare(val_dict, title='', label=None, metric='PAPR', vlines=None, save=False):
     plt.figure(figsize=(10, 7))
     # colors = cm.viridis(np.linspace(0, 0.9, len(val_dict)))
     for i, vals in enumerate(val_dict):
@@ -73,14 +73,19 @@ def plot_ccdf_compare(val_dict, title_suffix='', label=None, metric='PAPR', vlin
         y_axis = np.arange(len(sorted_vals), 0, -1) / len(sorted_vals)
 
         # Clipped (no filtering) -> keep solid; Clipped + Filtered -> dashed; others default
-        # todo: edit the function so that it takes labels as input
-        plt.semilogy(sorted_vals, y_axis, linewidth=2, label=label[i] if label else '')
-        # if i == 0:
-        #     # plt.semilogy(sorted_vals, y_axis, color=colors[0], linewidth=2, label='Unclipped')
-        #     plt.semilogy(sorted_vals, y_axis, linewidth=2, label='Unclipped')
-        # else:
-        #     # plt.semilogy(sorted_vals, y_axis, color=colors[i], linewidth=2, label=f'ICF ({i} iteration{"s" if i > 1 else ""})')
-        #     plt.semilogy(sorted_vals, y_axis, linewidth=2, label=f'ICF ({i} iteration{"s" if i > 1 else ""})')
+        # done: edit the function so that it takes labels as input
+        if label:
+            l = label[i]
+        elif i == 0:
+            # plt.semilogy(sorted_vals, y_axis, color=colors[0], linewidth=2, label='Unclipped')
+            # plt.semilogy(sorted_vals, y_axis, linewidth=2, label='Unclipped')
+            l = 'Unclipped'
+        else:
+            # plt.semilogy(sorted_vals, y_axis, color=colors[i], linewidth=2, label=f'ICF ({i} iteration{"s" if i > 1 else ""})')
+            # plt.semilogy(sorted_vals, y_axis, linewidth=2, label=f'ICF ({i} iteration{"s" if i > 1 else ""})')
+            l = f'ICF ({i} iteration{"s" if i > 1 else ""})'
+        # plt.semilogy(sorted_vals, y_axis, color=colors[i], linewidth=2, label=label[i])
+        plt.semilogy(sorted_vals, y_axis, linewidth=2, label=l if label else '')
 
     # all_data = np.concatenate([v for v in val_dict.values() if v.size > 0]) if val_dict else np.array([])
     # if all_data.size > 0:
@@ -92,7 +97,7 @@ def plot_ccdf_compare(val_dict, title_suffix='', label=None, metric='PAPR', vlin
         plt.xlim([4, 12])
     elif metric.lower() == 'cm':
         plt.xlim([2.5, 6])
-    plot_formatting(title_suffix, metric, vlines)
+    plot_formatting(title, metric, vlines)
     if save:
         plt.savefig(save, dpi=150)
     plt.show()

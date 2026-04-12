@@ -93,10 +93,11 @@ for _ in range(samples_per_L):
 # --- CCDF Calculation and Plotting ---
 
 cr_list = []
-for cr in clipping_ratios:
+for cr in clipping_ratios_dB:
     cr_list.append(f'Clipped & Filtered (CR={cr}dB)')
 labels = ['Unclipped', *cr_list]
-plot_ccdf_compare([papr_unclipped] + [clipped_papr_dict[cr] for cr in clipping_ratios], label=labels)
+title = f'PAPR Distribution: 16QAM (N={N}, L={L})\nUnclipped vs. Clipped and filtered at different CRs'
+plot_ccdf_compare([papr_unclipped] + [clipped_papr_dict[cr] for cr in clipping_ratios], title, label=labels)
 
 # # Plot Unclipped CCDF (Baseline)
 # papr_unclipped_sorted = np.sort(papr_unclipped)
