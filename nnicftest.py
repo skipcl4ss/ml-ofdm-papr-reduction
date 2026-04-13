@@ -7,11 +7,12 @@ from torch.utils.data import Dataset, DataLoader, Subset
 import time
 from ofdm.ccdf import plot_ccdf, plot_ccdf_compare
 from ofdm.metrics import calculate_papr, calculate_cm
-from nnicf import NNICFMapper, device
+from nnicf import NNICFMapper, device, denormalize
 
 # -----------------------------------------------------------------------------
 
 start = time.time()
+samples_per_L = 10000
 
 # 1024 features based on N=256 and oversampling L=4
 input_features = 256 * 4
@@ -95,11 +96,15 @@ if one_batch:
         predicted_real = Test_Mod_Re(test_X_real).numpy()
         predicted_imag = Test_Mod_Im(test_X_imag).numpy()
 
-    # todo: denormalize before recombining
+    pred_denorm_real = denormalize(predicted_real)
+    pred_denorm_imag = denormalize(predicted_imag)
+
+    # done: denormalize before recombining
     # 4. Reconstruct the Complex OFDM Signals
     original_complex = test_X_real.numpy() + 1j * test_X_imag.numpy()
     clipped_complex = test_Y_real.numpy() + 1j * test_Y_imag.numpy()
-    predicted_complex = predicted_real + 1j * predicted_imag
+    # predicted_complex = predicted_real + 1j * predicted_imag
+    predicted_complex = pred_denorm_real + 1j * pred_denorm_imag
 elif train_size < 100:
     # 2. Setup the Test Data (Files train_size-99)
     test_dataset_real = Subset(FastOFDMDataset("./data_pt/", part='real'), range(train_size, 100))
@@ -120,9 +125,7 @@ elif train_size < 100:
             X_real, X_imag = X_real.to(device), X_imag.to(device)
 
             # Predict
-            # fixme: raises an error when when using .numpy()
-            # pred_real = Test_Mod_Re(X_real).numpy()
-            # pred_imag = Test_Mod_Im(X_imag).numpy()
+            # ! shouldnt use .numpy() method because of criterion
             pred_real = Test_Mod_Re(X_real)
             pred_imag = Test_Mod_Im(X_imag)
 
@@ -133,11 +136,15 @@ elif train_size < 100:
             test_loss_real += loss_real.item()
             test_loss_imag += loss_imag.item()
 
-            # todo: denormalize before recombining
+            pred_denorm_real = denormalize(pred_real)
+            pred_denorm_imag = denormalize(pred_imag)
+
+            # done: denormalize before recombining
             # Reconstruct complex signals
             orig_complex = X_real.numpy() + 1j * X_imag.numpy()
             clip_complex = Y_real.numpy() + 1j * Y_imag.numpy()
-            pred_complex = pred_real + 1j * pred_imag
+            # pred_complex = pred_real + 1j * pred_imag
+            pred_complex = pred_denorm_real + 1j * pred_denorm_imag
 
             all_original.append(orig_complex)
             all_clipped.append(clip_complex)
@@ -156,7 +163,7 @@ elif train_size < 100:
     clipped_complex = np.concatenate(all_clipped, axis=0)
     predicted_complex = np.concatenate(all_predicted, axis=0)
 
-    print(f"Testing complete! Aggregated {test_size * 10000} OFDM symbols.")
+    print(f"Testing complete! Aggregated {test_size * samples_per_L} OFDM symbols.")
 
 # -----------------------------------------------------------------------------
 
@@ -165,7 +172,7 @@ orig_papr, clip_papr, pred_papr = [], [], []
 orig_cm, clip_cm, pred_cm = [], [], []
 
 # Iterate through the arrays
-for i in range(test_size * 10000 if not one_batch else 10000):
+for i in range(test_size * samples_per_L if not one_batch else samples_per_L):
     orig_papr.append(calculate_papr(original_complex[i]))
     clip_papr.append(calculate_papr(clipped_complex[i]))
     pred_papr.append(calculate_papr(predicted_complex[i]))
@@ -185,8 +192,8 @@ plot_ccdf_compare([orig_papr, clip_papr, pred_papr], f"Original vs Clipped vs {t
 plot_ccdf_compare([orig_cm, clip_cm, pred_cm], f"Original vs Clipped vs {title}", labels, metric="CM")
 
 # todo: find a way to embed the floor part into the plotting function
-# todo: find an appropriate naming for the 10k
-y_axis_len = test_size * 10000 if not one_batch else 10000
+# ! the size of data had an axis of size 10k, which i assume is samples_per_L
+y_axis_len = test_size * samples_per_L if not one_batch else samples_per_L
 y_axis = np.arange(y_axis_len, 0, -1) / y_axis_len
 papr_floor = np.where(y_axis == 1e-4)[0]
 cm_floor = np.where(y_axis == 1e-3)[0]

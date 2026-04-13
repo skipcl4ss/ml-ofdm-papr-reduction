@@ -43,17 +43,15 @@ def clip_and_filter_ofdm(freq_symbols, N, L, CR):
     Returns:
       tuple(original_oversampled_time, clipped_time_no_filter, clipped_filtered_time)
     """
-    # build oversampled frequency vector (zero padding in middle)
-    mid = N // 2
-    # zeros = np.zeros((L - 1) * N, dtype=complex)
-    # # bits_per_symbol = int(len(freq_symbols) // N)
-    # # zeros = np.zeros((L - 1) * N * bits_per_symbol, dtype=complex)
-    # oversampled_freq = np.concatenate([freq_symbols[:mid], zeros, freq_symbols[mid:]])
-    # # time domain oversampled signal (original)
-    # tx_time_oversampled = np.fft.ifft(oversampled_freq) * L
     tx_time_oversampled = oversample_time(freq_symbols, N, L)
     # soft clipping (no filtering)
     clipped_time = clip_time(tx_time_oversampled, CR)
+    clipped_filtered_time = filter_time(clipped_time, N)
+
+    return clipped_filtered_time
+
+def filter_time(clipped_time, N):
+    mid = N // 2
     # freq domain of clipped signal
     clipped_freq = np.fft.fft(clipped_time)
     # zero out the inserted bins (i.e., perform low-pass / band-limiting)
@@ -61,10 +59,7 @@ def clip_and_filter_ofdm(freq_symbols, N, L, CR):
     kept_freq = np.zeros_like(clipped_freq)
     kept_freq[:mid] = clipped_freq[:mid]
     kept_freq[-mid:] = clipped_freq[-mid:]
-    # kept_freq[-(N-mid):] = clipped_freq[-(N-mid):]
     # IFFT to get clipped+filtered time signal
     clipped_filtered_time = np.fft.ifft(kept_freq)
 
     return clipped_filtered_time
-    # ! good idea yet not very helpful
-    # return tx_time_oversampled, clipped_time, clipped_filtered_time

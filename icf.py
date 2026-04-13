@@ -1,9 +1,9 @@
 import numpy as np
 from ofdm.modem import qam16_mod, qpsk_mod
-from ofdm.candf import clip_time, oversample_time
+from ofdm.candf import clip_time, oversample_time, filter_time
 from ofdm.metrics import calculate_papr, calculate_cm
 from ofdm.ccdf import plot_ccdf_compare, plot_ccdf
-from nnicf import NNICFMapper, normalize
+from nnicf import NNICFMapper, normalize, denormalize
 import torch
 from scipy import signal
 import time
@@ -33,7 +33,7 @@ lr = 0.001
 lr_str = "dot" + str(lr).split(".")[1]
 
 # Data splitting (used only in saving and loading files, not in the actual C&F process)
-train_size = 80
+train_size = 100
 test_size = (100 - train_size) or 1
 train_test_str = f"{train_size}_{test_size}"
 
@@ -82,9 +82,10 @@ for _ in range(samples_per_L):
     for i in range(iterations):
         x_clipped = clip_time(x_time, cr)
 
-        # todo: experiment with clip_and_filter_ofdm()
+        # ! filter_time() is surprisingly better
+        x_time = filter_time(x_clipped, N)
         # Filtering: use lfilter (or filtfilt for zero-phase)
-        x_time = signal.lfilter(b, a, x_clipped).astype(np.complex64)
+        # x_time = signal.lfilter(b, a, x_clipped).astype(np.complex64)
         # x_time = signal.filtfilt(b, a, x_clipped)
 
         # Store PAPR of the current iterative result
@@ -110,9 +111,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Instantiate the empty models
 NN_Mod_Re = NNICFMapper(N_fft).to(device)
 NN_Mod_Im = NNICFMapper(N_fft).to(device)
+# todo: retest all current models after denormalization
 # Inject the trained weights
-NN_Mod_Re.load_state_dict(torch.load(f"trained_models/{mod}_mod_re_weights_{train_test_str}_{lr_str}.pth", weights_only=True))
-NN_Mod_Im.load_state_dict(torch.load(f"trained_models/{mod}_mod_im_weights_{train_test_str}_{lr_str}.pth", weights_only=True))
+NN_Mod_Re.load_state_dict(torch.load(f"./trained_models/{mod}_mod_re_weights_{train_test_str}_{lr_str}.pth", weights_only=True))
+NN_Mod_Im.load_state_dict(torch.load(f"./trained_models/{mod}_mod_im_weights_{train_test_str}_{lr_str}.pth", weights_only=True))
+
 NN_Mod_Re.eval()
 NN_Mod_Im.eval()
 
@@ -121,10 +124,14 @@ with torch.no_grad():
     predicted_real = NN_Mod_Re(tx_real).numpy()
     predicted_imag = NN_Mod_Im(tx_imag).numpy()
 
-# todo: denormalize before recombining
+pred_denorm_real = denormalize(predicted_real)
+pred_denorm_imag = denormalize(predicted_imag)
+
+# done: denormalize before recombining
 # 4. Reconstruct the Complex OFDM Signals
 # each has length of samples_per_L
-predicted_complex = predicted_real + 1j * predicted_imag
+# predicted_complex = predicted_real + 1j * predicted_imag
+predicted_complex = pred_denorm_real + 1j * pred_denorm_imag
 
 # 5. Calculate PAPR (Peak-to-Average Power Ratio) for CCDF
 pred_papr, pred_cm = [], []
@@ -150,7 +157,7 @@ cm_floor = np.where(y_axis == 1e-3)[0]
 cm_vlines = [np.sort(cm_unclipped)[cm_floor], np.sort(iterations_cm[-1])[cm_floor]]
 plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
 
-# labels = ["OG", "CLipped 1", "CLipped 2", "CLipped 3"]
+# labels = ["OG", "Clipped 1", "Clipped 2", "Clipped 3"]
 # plot_ccdf_compare([papr_unclipped, *iterations_papr], label=labels, metric="papr")
 # plot_ccdf_compare([cm_unclipped, *iterations_cm], label=labels, metric="cm")
 

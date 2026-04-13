@@ -83,7 +83,7 @@ for _ in range(samples_per_L):
 
         x_clipped = clip_time(x_time, cr)
 
-        # todo: experiment with clip_and_filter_ofdm()
+        # todo: experiment with filter_time()
         # 5. Filtering (The Proposed IIR Filter)
         x_filtered = signal.lfilter(b, a, x_clipped)
 

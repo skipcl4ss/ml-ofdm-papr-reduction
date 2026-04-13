@@ -7,7 +7,7 @@ import torch.nn as nn
 torch.set_num_threads(8)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# todo: make a denormalize function
+# fixme: dont know how to use it in icfber.py
 def normalize(X_raw, Y_raw, part):
     # 1. Extract Real or Imaginary
     if part == "real":
@@ -27,6 +27,18 @@ def normalize(X_raw, Y_raw, part):
 
     # 3. Return as a hyper-fast PyTorch file
     return X_norm, Y_norm
+
+# todo: test this
+def normalize2(X_raw):
+    X_min, X_max = X_raw.min(), X_raw.max()
+    X_norm = 2.0 * ((X_raw - X_min) / (X_max - X_min)) - 1.0 if X_max != X_min else X_raw
+    return X_norm
+
+# done: make a denormalize function
+def denormalize(pred_norm):
+    pred_min, pred_max = pred_norm.min(), pred_norm.max()
+    pred_raw = ((pred_norm + 1.0) / 2.0) * (pred_max - pred_min) + pred_min if pred_max != pred_min else pred_norm
+    return pred_raw
 
 class TriangularActivation(nn.Module):
     """

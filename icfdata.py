@@ -1,6 +1,6 @@
 import numpy as np
 from ofdm.modem import qam16_mod, qpsk_mod
-from ofdm.candf import clip_time, oversample_time
+from ofdm.candf import clip_time, oversample_time, filter_time
 from scipy import signal
 import time
 import os
@@ -68,9 +68,10 @@ for i in range(100):
         for j in range(iterations):
             x_clipped = clip_time(x_time, cr)
 
-            # todo: experiment with clip_and_filter_ofdm()
+            # todo: retrain with filter_time()
+            x_time = filter_time(x_clipped, N)
             # Filtering: use lfilter (or filtfilt for zero-phase)
-            x_time = signal.lfilter(b, a, x_clipped).astype(np.complex64)
+            # x_time = signal.lfilter(b, a, x_clipped).astype(np.complex64)
             # x_time = signal.filtfilt(b, a, x_clipped)
 
             # store the final iteration's real and imag parts separately
