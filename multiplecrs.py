@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
 from ofdm.candf import oversample_time, clip_time
-from ofdm.ccdf import plot_ccdf_compare
+from ofdm.plots import plot_ccdf_compare
 from ofdm.modem import qam16_mod
 from ofdm.metrics import calculate_papr
 import time

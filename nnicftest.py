@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader, Subset
 import time
-from ofdm.ccdf import plot_ccdf, plot_ccdf_compare
+from ofdm.plots import plot_ccdf, plot_ccdf_compare
 from ofdm.metrics import calculate_papr, calculate_cm
 from nnicf import NNICFMapper, device, denormalize
 

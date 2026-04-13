@@ -2,7 +2,7 @@ import numpy as np
 from ofdm.modem import qam16_mod, qpsk_mod
 from ofdm.candf import clip_time, oversample_time, filter_time
 from ofdm.metrics import calculate_papr, calculate_cm
-from ofdm.ccdf import plot_ccdf_compare, plot_ccdf
+from ofdm.plots import plot_ccdf_compare, plot_ccdf
 from nnicf import NNICFMapper, normalize, denormalize
 import torch
 from scipy import signal

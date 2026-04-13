@@ -1,5 +1,5 @@
 import numpy as np
-from ofdm.ccdf import plot_ber
+from ofdm.plots import plot_ber
 from ofdm.modem import qam16_mod, qpsk_mod, qam16_demod, qpsk_demod
 from ofdm.candf import clip_time, clip_and_filter_ofdm, oversample_time, emulate_awgn_channel
 from ofdm.metrics import ber_theoretical
