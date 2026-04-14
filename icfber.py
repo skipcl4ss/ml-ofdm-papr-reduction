@@ -5,7 +5,7 @@ from ofdm.candf import clip_time, clip_and_filter_ofdm, oversample_time, emulate
 from ofdm.metrics import ber_theoretical
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-from nnicf import NNICFMapper, normalize, normalize2, denormalize
+from nnicf import NNICFMapper, normalize, denormalize
 import torch
 from scipy import signal
 import time
@@ -60,7 +60,7 @@ b, a = signal.cheby1(N=4, rp=1, Wn=fp)
 BER_results = {
     'no_clipping': [],
     'theoretical': [],
-    # 'predicted': []
+    'predicted': []
 }
 
 for i in range(1, iterations + 1):
@@ -93,7 +93,7 @@ for EbNo_dB in EbNo_range:
         tx_bits = np.random.randint(0, 2, int(N * bits_per_symbol))
         tx_bits_grouped = tx_bits.reshape(-1, bits_per_symbol)
 
-        # todo: make a function this part
+        # todo: make a function for this part
         # tx_bits_decimal = tx_bits_grouped.dot(weights)
         # Reshape back into OFDM symbol groups (e.g., batches of 256 subcarriers)
         # tx_data = tx_bits_decimal
@@ -130,13 +130,10 @@ for EbNo_dB in EbNo_range:
 
         bit_error_no_clip += np.sum(tx_bits != rx_bits_no_clip)
 
+        tx_time_oversampled_base = oversample_time(tx_symbols, N, L)
         # --- Process each iteration ---
         for i in range(1, iterations + 1):
             # Get clipped signal (no filtering)
-            # zeros = np.zeros((L - 1) * N, dtype=complex)
-            # oversampled_freq = np.concatenate([tx_symbols[:mid], zeros, tx_symbols[mid:]])
-            # # fixed: problem was fixed by multiplying by L
-            # tx_time_oversampled = np.fft.ifft(oversampled_freq) * L
             tx_time_oversampled = oversample_time(tx_symbols, N, L)
             clipped_time = clip_time(tx_time_oversampled, cr)
 
@@ -191,48 +188,81 @@ for EbNo_dB in EbNo_range:
                     if j // k: j -= k
             rx_bits_filtered = np.array(rx_bits_filtered)
 
-            # # fixme: cannot implement nnicf
-            # # * nnicf part
-            # if i < iterations - 1:
-            #     tx_symbols = np.fft.fft(filtered_downsampled, N)  # ? why not rx_symbols_filtered
-            #     # tx_symbols = rx_symbols_filtered
-            #     # tx_symbols = np.fft.fft(filtered_downsampled)
-            # else:
-            #     # 1. Normalize the data and turn it to torch tensors
-            #     tx_real = normalize2(tx_symbols)
-            #     tx_test = denormalize(tx_real)
-            #     tx_real, rx_real = normalize(tx_symbols, rx_symbols_filtered)
-            #     tx_imag, rx_imag = normalize(tx_symbols, rx_symbols_filtered)
-            #
-            #     # 3. Generate Predictions (No gradients needed for testing)
-            #     with torch.no_grad():
-            #         predicted_real = NN_Mod_Re(tx_real).numpy()
-            #         # predicted_imag = NN_Mod_Im(tx_imag).numpy()
-            #
-            #     pred_denorm_real = denormalize(predicted_real)
-            #     pred_denorm_imag = denormalize(predicted_imag)
-            #
-            #     predicted_complex = pred_denorm_real + 1j * pred_denorm_imag
-            #
-            #     if mod == "16qam":
-            #         predicted_data = qam16_demod(predicted_complex)
-            #     elif mod == "qpsk":
-            #         predicted_data = qpsk_demod(predicted_complex)
-            #
-            #     predicted_bits = []
-            #     for j in predicted_data:
-            #         for k in weights:
-            #             predicted_bits.append(j // k)
-            #             if j // k: j -= k
-            #     predicted_bits = np.array(predicted_bits)
-            #
-            #     bit_error_predicted += np.sum(tx_bits != predicted_bits)
+
 
             bit_error_filtered[i] += np.sum(tx_bits != rx_bits_filtered)
 
-            # tx_symbols = np.fft.fft(filtered_downsampled, N) # ? why not rx_symbols_filtered
+            tx_symbols = np.fft.fft(filtered_downsampled, N) # ? why not rx_symbols_filtered
             # # tx_symbols = rx_symbols_filtered
             # # tx_symbols = np.fft.fft(filtered_downsampled)
+
+        tx_time_oversampled_recombined = np.stack((tx_time_oversampled_base.real, tx_time_oversampled_base.imag))
+        shape_len = len(tx_time_oversampled_recombined.shape)
+        # print("recombined shape:", shape_len)
+        # print("recombined first 5 columns:\n", tx_time_oversampled_recombined[:, :5])  # if shape is (2, N)
+        # print("real row first 5:", tx_time_oversampled_recombined[0, :5])
+        # print("imag row first 5:", tx_time_oversampled_recombined[1, :5])
+        # print("matches real?", np.allclose(tx_time_oversampled_recombined[0], tx_time_oversampled_real))
+        # print("matches imag?", np.allclose(tx_time_oversampled_recombined[1], tx_time_oversampled_imag))
+
+
+    # 1. Normalize the data and turn it to torch tensors
+        # tx_real = normalize2(tx_symbols.real)
+        # tx_test = denormalize(tx_real)
+        # print(tx_symbols.real)
+
+        # print(tx_time_oversampled_base.shape)
+        # print(len(tx_time_oversampled_base.shape))
+
+        # tx_real, tx_imag, minmax_real, minmax_imag = normalize2(tx_time_oversampled_base)
+        tx_real, tx_imag, minmax_real, minmax_imag = normalize(tx_time_oversampled_recombined, shape_len)
+        # print(tx_real.shape)
+        # tx_real = tx_real.reshape(-1, 1)
+        # print(tx_real.shape)
+
+        # 1. Convert to PyTorch Tensors and ADD a batch dimension [1, 1024]
+        tx_real_tensor = torch.tensor(tx_real, dtype=torch.float32).unsqueeze(0).to(device)
+        tx_imag_tensor = torch.tensor(tx_imag, dtype=torch.float32).unsqueeze(0).to(device)
+
+        # 2. Generate Predictions
+        with torch.no_grad():
+            # --- BYPASS TEST: Comment out the network ---
+            # predicted_real = NN_Mod_Re(tx_real_tensor).squeeze(0).cpu().numpy().flatten()
+            # predicted_imag = NN_Mod_Im(tx_imag_tensor).squeeze(0).cpu().numpy().flatten()
+
+            # --- Pass the original input straight through ---
+            predicted_real = tx_real_tensor.squeeze(0).cpu().numpy().flatten()
+            predicted_imag = tx_imag_tensor.squeeze(0).cpu().numpy().flatten()
+            # plt.plot(tx_real_tensor.squeeze().cpu().numpy(), label="Original Input (Normalized)")
+            # plt.plot(predicted_real, label="NN Output (Flatlined)")
+            # plt.legend()
+            # plt.show()
+            # exit()
+
+        pred_denorm_real = denormalize(predicted_real, minmax_real)
+        pred_denorm_imag = denormalize(predicted_imag, minmax_imag)
+
+        predicted_complex = pred_denorm_real + 1j * pred_denorm_imag
+
+        predicted_downsampled = predicted_complex[::L]
+        predicted_symbols = emulate_awgn_channel(predicted_downsampled, CP, SNR_dB)
+
+        if mod == "16qam":
+            # predicted_data = qam16_demod(predicted_complex)
+            predicted_data = qam16_demod(predicted_symbols)
+        elif mod == "qpsk":
+            # predicted_data = qpsk_demod(predicted_complex)
+            predicted_data = qpsk_demod(predicted_symbols)
+
+        # todo: can use np.unpackbits()
+        predicted_bits = []
+        for j in predicted_data:
+            for k in weights:
+                predicted_bits.append(j // k)
+                if j // k: j -= k
+        predicted_bits = np.array(predicted_bits)
+
+        bit_error_predicted += np.sum(tx_bits != predicted_bits)
 
         total_bits += len(tx_bits)
 
@@ -243,7 +273,7 @@ for EbNo_dB in EbNo_range:
 
     BER_results['no_clipping'].append(ber_no_clip)
     BER_results['theoretical'].append(ber_theory)
-    # BER_results['predicted'].append(ber_predicted)
+    BER_results['predicted'].append(ber_predicted)
 
     for i in range(1, iterations + 1):
         ber_clipped = bit_error_clipped[i] / total_bits
@@ -264,6 +294,8 @@ for EbNo_dB in EbNo_range:
 # plt.semilogy(EbNo_range, BER_results['theoretical'], '--', color='black', linewidth=2.5, label='Theoretical')
 # # Plot no clipping (simulated)
 # plt.semilogy(EbNo_range, BER_results['no_clipping'], 'o-', color='gray', linewidth=2, markersize=8, label='No Clipping (Simulated)')
+# # Plot predicted
+# plt.semilogy(EbNo_range, BER_results['predicted'], 'o-', color='red', linewidth=2, markersize=8, label='Predicted')
 #
 # # Plot clipped curves
 # for i in range(1, iterations + 1):

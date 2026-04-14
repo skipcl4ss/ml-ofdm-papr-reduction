@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 # Explicitly tell PyTorch to utilize your 8 CPU cores for matrix math
 # Check for GPU availability to drastically speed up training
@@ -7,37 +8,32 @@ import torch.nn as nn
 torch.set_num_threads(8)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# fixme: dont know how to use it in icfber.py
-def normalize(X_raw, Y_raw, part):
-    # 1. Extract Real or Imaginary
-    if part == "real":
-        part_idx = 0
-    elif part == "imag":
-        part_idx = 1
+# ! instead of returning only real or imag part of two datasets (tx and rx), return both real and image of only one set
+# ! works with data of shapes (2, samples_per_L, N * L), or (2, N * L) where 2 is for real and imag data
+def normalize(X_raw, shape_len):
+    if shape_len == 2:
+        X_batch_real = torch.tensor(X_raw[0, :], dtype=torch.float32)
+        X_batch_imag = torch.tensor(X_raw[1, :], dtype=torch.float32)
+    elif shape_len == 3:
+        X_batch_real = torch.tensor(X_raw[0, :, :], dtype=torch.float32)
+        X_batch_imag = torch.tensor(X_raw[1, :, :], dtype=torch.float32)
 
-    X_batch = torch.tensor(X_raw[part_idx, :, :], dtype=torch.float32)
-    Y_batch = torch.tensor(Y_raw[part_idx, :, :], dtype=torch.float32)
+    # Normalize once and for all
+    X_min_real, X_max_real = X_batch_real.min(), X_batch_real.max()
+    X_min_imag, X_max_imag = X_batch_imag.min(), X_batch_imag.max()
 
-    # 2. Normalize once and for all
-    X_min, X_max = X_batch.min(), X_batch.max()
-    Y_min, Y_max = Y_batch.min(), Y_batch.max()
-
-    X_norm = 2.0 * ((X_batch - X_min) / (X_max - X_min)) - 1.0 if X_max != X_min else X_batch
-    Y_norm = 2.0 * ((Y_batch - Y_min) / (Y_max - Y_min)) - 1.0 if Y_max != Y_min else Y_batch
+    X_norm_real = 2.0 * ((X_batch_real - X_min_real) / (X_max_real - X_min_real)) - 1.0 if X_max_real != X_min_real else X_batch_real
+    X_norm_imag = 2.0 * ((X_batch_imag - X_min_imag) / (X_max_imag - X_min_imag)) - 1.0 if X_max_imag != X_min_imag else X_batch_imag
 
     # 3. Return as a hyper-fast PyTorch file
-    return X_norm, Y_norm
+    return X_norm_real, X_norm_imag, (X_min_real, X_max_real), (X_min_imag, X_max_imag)
 
-# todo: test this
-def normalize2(X_raw):
-    X_min, X_max = X_raw.min(), X_raw.max()
-    X_norm = 2.0 * ((X_raw - X_min) / (X_max - X_min)) - 1.0 if X_max != X_min else X_raw
-    return X_norm
-
-# done: make a denormalize function
-def denormalize(pred_norm):
-    pred_min, pred_max = pred_norm.min(), pred_norm.max()
-    pred_raw = ((pred_norm + 1.0) / 2.0) * (pred_max - pred_min) + pred_min if pred_max != pred_min else pred_norm
+# ! should be used on real and imag separately
+# fixed: no longer gives the exact same values as pred_norm, since it does not have access to the original data
+def denormalize(pred_norm, minmax):
+    raw_min, raw_max = minmax
+    raw_min, raw_max = np.array([raw_min]), np.array([raw_max])
+    pred_raw = ((pred_norm + 1.0) / 2.0) * (raw_max - raw_min) + raw_min if raw_max != raw_min else pred_norm
     return pred_raw
 
 class TriangularActivation(nn.Module):

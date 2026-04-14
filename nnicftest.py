@@ -29,7 +29,7 @@ lr_str = "dot" + str(lr).split(".")[1]
 print(f"Hyperparameters: epochs = {epochs}, learning rate = {lr} ({lr_str} used in naming files), batch size = None (for now)")
 
 # Data splitting
-train_size = 80
+train_size = 100
 test_size = (100 - train_size) or 1
 train_test_str = f"{train_size}_{test_size}"
 if train_size < 100:
@@ -96,6 +96,7 @@ if one_batch:
         predicted_real = Test_Mod_Re(test_X_real).numpy()
         predicted_imag = Test_Mod_Im(test_X_imag).numpy()
 
+    # fixme: get minmax values
     pred_denorm_real = denormalize(predicted_real)
     pred_denorm_imag = denormalize(predicted_imag)
 
@@ -136,6 +137,7 @@ elif train_size < 100:
             test_loss_real += loss_real.item()
             test_loss_imag += loss_imag.item()
 
+            # fixme: get minmax values
             pred_denorm_real = denormalize(pred_real)
             pred_denorm_imag = denormalize(pred_imag)
 

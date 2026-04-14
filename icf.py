@@ -47,6 +47,7 @@ iterations_papr = [[] for _ in range(iterations)]
 iterations_cm = [[] for _ in range(iterations)]
 
 # todo: implement scf
+# todo: plot time domain signal
 
 tx_time, rx_time = [[], []], [[], []]
 for _ in range(samples_per_L):
@@ -102,8 +103,8 @@ rx_time = np.array(rx_time, dtype=np.float32)
 # * Compare with nnicf model
 
 # 1. Normalize the data and turn it to torch tensors
-tx_real, rx_real = normalize(tx_time, rx_time, "real")
-tx_imag, rx_imag = normalize(tx_time, rx_time, "imag")
+print(tx_time.shape, len(tx_time.shape))
+tx_real, tx_imag, tx_minmax_real, tx_minmax_imag = normalize(tx_time, len(tx_time.shape))
 
 # 2. Load the trained models
 # Check if GPU is available and set device accordingly
@@ -124,13 +125,19 @@ with torch.no_grad():
     predicted_real = NN_Mod_Re(tx_real).numpy()
     predicted_imag = NN_Mod_Im(tx_imag).numpy()
 
-pred_denorm_real = denormalize(predicted_real)
-pred_denorm_imag = denormalize(predicted_imag)
+# predicted_real = torch.tensor(predicted_real, dtype=torch.float32)
+# predicted_imag = torch.tensor(predicted_imag, dtype=torch.float32)
 
-# done: denormalize before recombining
+# pred_denorm_real = denormalize(predicted_real)
+# pred_denorm_imag = denormalize(predicted_imag)
+pred_denorm_real = denormalize(predicted_real, tx_minmax_real)
+pred_denorm_imag = denormalize(predicted_imag, tx_minmax_imag)
+
+# pred_denorm_real = np.array(pred_denorm_real)
+# pred_denorm_imag = np.array(pred_denorm_imag)
+
 # 4. Reconstruct the Complex OFDM Signals
-# each has length of samples_per_L
-# predicted_complex = predicted_real + 1j * predicted_imag
+# each has shape of samples_per_L, (N * L)
 predicted_complex = pred_denorm_real + 1j * pred_denorm_imag
 
 # 5. Calculate PAPR (Peak-to-Average Power Ratio) for CCDF

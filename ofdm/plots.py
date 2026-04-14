@@ -36,16 +36,16 @@ def ber_format(EbNo_range, title):
         plt.title(title)
     plt.xlim([EbNo_range[0], EbNo_range[-1]])
 
-    # todo: implement this
+    # todo: implement ylim in ber
+    plt.ylim([1e-4, 1e0])
     # if mod == "16qam":
     #     plt.ylim([1e-3, 1e0])
     # elif mod == "qpsk":
     #     plt.ylim([1e-4, 1e0])
     plt.grid(True, which='both', linestyle='--', alpha=0.6)
-    plt.ylim([1e-4, 1e0])
     # plt.tight_layout()
 
-def plot_ccdf(vals, title, label, metric='PAPR', vlines=None, save=False):
+def plot_ccdf(vals, title, label=None, metric='PAPR', vlines=None, save=False):
     plt.figure(figsize=(10, 7))
     sorted_vals = np.sort(vals)
     y_axis = np.arange(len(sorted_vals), 0, -1) / len(sorted_vals) # ? why dont we use the theoretical CCDF function
