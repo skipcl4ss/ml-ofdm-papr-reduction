@@ -61,6 +61,7 @@ def plot_ccdf(vals, title, label=None, metric='PAPR', vlines=None, save=False):
     #     y_theory = ccdf_theoretical(N, x_theory)
     #     plt.semilogy(x_theory, y_theory, 'k--', linewidth=1.5, label='Theoretical (L=1)')
 
+    # todo: instead of max(), use the percentile trick in nnicf.ipynb
     if metric.lower() == "papr" and 4 <= max(sorted_vals) <= 12:
         plt.xlim([4, 12])
     elif metric.lower() == "papr":

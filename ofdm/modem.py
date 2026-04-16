@@ -1,6 +1,7 @@
 import numpy as np
 
 # todo: see test.py and look for a way to generalize these functions
+# done: see if i could use np.unpackbits() instead of weight
 
 # Define 16-QAM and QPSK mappings
 qam16_mapping  =  np.array([-3-3j, -3-1j, -3+3j, -3+1j,
@@ -16,14 +17,18 @@ qam16_mapping  =  np.array([-3-3j, -3-1j, -3+3j, -3+1j,
 qpsk_mapping  =   np.array([+1+1j, -1+1j,
                             +1-1j, -1-1j])
 
-def qam16_mod(data):
-    """Takes noisy 16-QAM symbols and returns the most likely integers (0-15)."""
+def qam16_mod(data, bits=False):
+    if bits:
+        # weights = 1 << np.arange(int(np.log2(M)) - 1, -1, -1, dtype=int)
+        weights = 1 << np.arange(int(np.log2(16)) - 1, -1, -1, dtype=int)
+        data = data.reshape(-1, int(np.log2(16)))
+        data = data.dot(weights)
     # data = np.random.randint(0, 16, n_symbols)
     symbols = qam16_mapping[data]
     # Normalize power to 1 (Average power of this 16-QAM constellation is 10)
     return symbols / np.sqrt(10)
 
-def qam16_demod(rx_symbols):
+def qam16_demod(rx_symbols, bits=False):
     """Takes noisy 16-QAM symbols and returns the most likely integers (0-15)."""
     # 1. Un-normalize the received symbols back to the original grid
     rx_scaled = rx_symbols * np.sqrt(10)
@@ -35,17 +40,26 @@ def qam16_demod(rx_symbols):
     # 3. Find the index (which corresponds to the integer 0-15) of the minimum distance
     rx_data = np.argmin(distances, axis=1)
 
+    if bits:
+        # rx_data = np.unpackbits(rx_data.astype(np.uint8)[:, None], axis=1)[:, -int(np.log2(M)):].flatten()
+        rx_data = np.unpackbits(rx_data.astype(np.uint8)[:, None], axis=1)[:, -int(np.log2(16)):].flatten()
+
     return rx_data
 
-def qpsk_mod(data):
+def qpsk_mod(data, bits=False):
+    if bits:
+        # weights = 1 << np.arange(int(np.log2(M)) - 1, -1, -1, dtype=int)
+        weights = 1 << np.arange(int(np.log2(4)) - 1, -1, -1, dtype=int)
+        data = data.reshape(-1, int(np.log2(4)))
+        data = data.dot(weights)
     # data = np.random.randint(0, 4, n_symbols)
     symbols = qpsk_mapping[data]
     # Normalize average power to 1 (each raw symbol has power 2)
     return symbols / np.sqrt(2)
 
 # done: apparently is correct, even tho i just copied qam16_demod and changed accordingly
-def qpsk_demod(rx_symbols):
-    """Takes noisy 16-QPSK symbols and returns the most likely integers (0-3)."""
+def qpsk_demod(rx_symbols, bits=False):
+    """Takes noisy QPSK symbols and returns the most likely integers (0-3)."""
     # 1. Un-normalize the received symbols back to the original grid
     rx_scaled = rx_symbols * np.sqrt(2)
 
@@ -55,5 +69,9 @@ def qpsk_demod(rx_symbols):
 
     # 3. Find the index (which corresponds to the integer 0-3) of the minimum distance
     rx_data = np.argmin(distances, axis=1)
+
+    if bits:
+        # rx_data = np.unpackbits(rx_data.astype(np.uint8)[:, None], axis=1)[:, -int(np.log2(M)):].flatten()
+        rx_data = np.unpackbits(rx_data.astype(np.uint8)[:, None], axis=1)[:, -int(np.log2(4)):].flatten()
 
     return rx_data

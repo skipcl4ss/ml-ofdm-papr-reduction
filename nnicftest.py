@@ -1,21 +1,16 @@
 import os
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader, Subset
 import time
 from ofdm.plots import plot_ccdf, plot_ccdf_compare
 from ofdm.metrics import calculate_papr, calculate_cm
-from nnicf import NNICFMapper, device, denormalize
+from nnicf import NNICFMapper, device, denormalize, criterion
 
 # -----------------------------------------------------------------------------
 
 start = time.time()
 samples_per_L = 10000
-
-# 1024 features based on N=256 and oversampling L=4
-input_features = 256 * 4
 
 # Modulation scheme
 mod = "16qam"
@@ -29,7 +24,7 @@ lr_str = "dot" + str(lr).split(".")[1]
 print(f"Hyperparameters: epochs = {epochs}, learning rate = {lr} ({lr_str} used in naming files), batch size = None (for now)")
 
 # Data splitting
-train_size = 100
+train_size = 80
 test_size = (100 - train_size) or 1
 train_test_str = f"{train_size}_{test_size}"
 if train_size < 100:
@@ -37,18 +32,27 @@ if train_size < 100:
 elif train_size == 100:
     one_batch = "00"
 print(f"dataset is split into {train_size} training files and {test_size} batches ({train_test_str} used in naming files, while {one_batch} is the index of used batch if testing on 1 batch)")
+
 if train_size == 100:
     print("This 1 batch is of index 00, and was already used in training")
 
 batch_suffix = f" (Batch #{one_batch})" if one_batch else ""
 params = f"{mod.upper()} lr = {lr} ({train_size} Training/{test_size if not one_batch else 1} Testing){batch_suffix}"
 print(params)
-#%%
+
+pt_dir = "./pt_dir/"
+model_dir = "./new architecture/"
+graph_dir = "./new architecture/"
+os.makedirs(pt_dir, exist_ok=True)
+os.makedirs(model_dir, exist_ok=True)
+os.makedirs(graph_dir, exist_ok=True)
+print(f'"{pt_dir}", "{model_dir}", and "{graph_dir}" are the 3 locations for pt files, nn model weights and graphs respectively')
+
+# -----------------------------------------------------------------------------
+
 # Explicitly tell PyTorch to utilize your 8 CPU cores for matrix math
 # Check for GPU availability to drastically speed up training
 # ! cuda is available only on nvidia gpu
-torch.set_num_threads(8)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"PyTorch using {torch.get_num_threads()} threads on {device}")
 
 # -----------------------------------------------------------------------------
@@ -64,22 +68,22 @@ class FastOFDMDataset(Dataset):
     def __getitem__(self, idx):
         # Instantly loads the pre-normalized tensors directly into memory!
         file_path = os.path.join(self.folder_path, f"{mod}_tx_rx_32_part_{idx:02d}_{self.part}.pt")
-        X_norm, Y_norm = torch.load(file_path, weights_only=True)
-        return X_norm, Y_norm
+        # Load the dictionary
+        data_pkg = torch.load(file_path, weights_only=False)
 
-# -----------------------------------------------------------------------------
-
-# Standard Mean Squared Error loss
-criterion = nn.MSELoss()
+        # Return the tensors AND the scaling limits
+        return (data_pkg['X_norm'], data_pkg['Y_norm'],
+                data_pkg['X_min'], data_pkg['X_max'],
+                data_pkg['Y_min'], data_pkg['Y_max'])
 
 # -----------------------------------------------------------------------------
 
 # 1. Load the Saved Models
-Test_Mod_Re = NNICFMapper(input_features).to(device)
-Test_Mod_Im = NNICFMapper(input_features).to(device)
+Test_Mod_Re = NNICFMapper().to(device)
+Test_Mod_Im = NNICFMapper().to(device)
 
-Test_Mod_Re.load_state_dict(torch.load(f"./trained_models/{mod}_mod_re_weights_{train_test_str}_{lr_str}.pth", weights_only=True))
-Test_Mod_Im.load_state_dict(torch.load(f"./trained_models/{mod}_mod_im_weights_{train_test_str}_{lr_str}.pth", weights_only=True))
+Test_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{mod}_mod_re_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
+Test_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{mod}_mod_im_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
 
 Test_Mod_Re.eval()
 Test_Mod_Im.eval()
@@ -87,29 +91,34 @@ Test_Mod_Im.eval()
 # -----------------------------------------------------------------------------
 
 if one_batch:
-    # 2. Grab one batch of data to test
-    test_X_real, test_Y_real = torch.load(f"./data_pt/{mod}_tx_rx_32_part_{one_batch}_real.pt", weights_only=True)
-    test_X_imag, test_Y_imag = torch.load(f"./data_pt/{mod}_tx_rx_32_part_{one_batch}_imag.pt", weights_only=True)
+    # 2. Grab one batch of data to test (Load the dictionary packages)
+    pkg_real = torch.load(os.path.join(pt_dir, f"{mod}_tx_rx_32_part_{one_batch}_real.pt"), weights_only=False)
+    pkg_imag = torch.load(os.path.join(pt_dir, f"{mod}_tx_rx_32_part_{one_batch}_imag.pt"), weights_only=False)
+    # Extract tensors
+    test_X_real, test_Y_real = pkg_real['X_norm'], pkg_real['Y_norm']
+    test_X_imag, test_Y_imag = pkg_imag['X_norm'], pkg_imag['Y_norm']
 
-    # 3. Generate Predictions (No gradients needed for testing)
+    # 3. Generate Predictions (Reshape, Predict, Reshape back)
     with torch.no_grad():
-        predicted_real = Test_Mod_Re(test_X_real).numpy()
-        predicted_imag = Test_Mod_Im(test_X_imag).numpy()
+        # Memoryless flattening
+        X_real_flat = test_X_real.view(-1, 1).to(device)
+        X_imag_flat = test_X_imag.view(-1, 1).to(device)
 
-    # fixme: get minmax values
-    pred_denorm_real = denormalize(predicted_real)
-    pred_denorm_imag = denormalize(predicted_imag)
+        predicted_real = Test_Mod_Re(X_real_flat).view_as(test_X_real).cpu().numpy()
+        predicted_imag = Test_Mod_Im(X_imag_flat).view_as(test_X_imag).cpu().numpy()
 
-    # done: denormalize before recombining
+    # Denormalize using exact dictionary limits
+    pred_denorm_real = denormalize(predicted_real, (pkg_real['X_min'], pkg_real['X_max']))
+    pred_denorm_imag = denormalize(predicted_imag, (pkg_imag['X_min'], pkg_imag['X_max']))
+
     # 4. Reconstruct the Complex OFDM Signals
     original_complex = test_X_real.numpy() + 1j * test_X_imag.numpy()
     clipped_complex = test_Y_real.numpy() + 1j * test_Y_imag.numpy()
-    # predicted_complex = predicted_real + 1j * predicted_imag
     predicted_complex = pred_denorm_real + 1j * pred_denorm_imag
 elif train_size < 100:
     # 2. Setup the Test Data (Files train_size-99)
-    test_dataset_real = Subset(FastOFDMDataset("./data_pt/", part='real'), range(train_size, 100))
-    test_dataset_imag = Subset(FastOFDMDataset("./data_pt/", part='imag'), range(train_size, 100))
+    test_dataset_real = Subset(FastOFDMDataset(pt_dir, part='real'), range(train_size, 100))
+    test_dataset_imag = Subset(FastOFDMDataset(pt_dir, part='imag'), range(train_size, 100))
 
     # We set shuffle=False to ensure real and imag batches stay perfectly aligned
     test_loader_real = DataLoader(test_dataset_real, batch_size=None, shuffle=False)
@@ -121,31 +130,37 @@ elif train_size < 100:
     test_loss_real = 0.0
     test_loss_imag = 0.0
     with torch.no_grad():
-        for (X_real, Y_real), (X_imag, Y_imag) in zip(test_loader_real, test_loader_imag):
+        for (X_real, Y_real, X_r_min, X_r_max, _, _), (X_imag, Y_imag, X_i_min, X_i_max, _, _) in zip(test_loader_real, test_loader_imag):
             # Move inputs to device
             X_real, X_imag = X_real.to(device), X_imag.to(device)
 
+            # 1. Flatten for memoryless prediction
+            X_real_flat = X_real.view(-1, 1)
+            X_imag_flat = X_imag.view(-1, 1)
+
             # Predict
             # ! shouldnt use .numpy() method because of criterion
-            pred_real = Test_Mod_Re(X_real)
-            pred_imag = Test_Mod_Im(X_imag)
+            pred_real_flat = Test_Mod_Re(X_real_flat)
+            pred_imag_flat = Test_Mod_Im(X_imag_flat)
 
-            # Calculate the Loss for this batch
-            loss_real = criterion(pred_real, Y_real)
-            loss_imag = criterion(pred_imag, Y_imag)
+            # 2. Calculate MSE Loss on the flat tensors
+            loss_real = criterion(pred_real_flat, Y_real.view(-1, 1))
+            loss_imag = criterion(pred_imag_flat, Y_imag.view(-1, 1))
 
             test_loss_real += loss_real.item()
             test_loss_imag += loss_imag.item()
 
-            # fixme: get minmax values
-            pred_denorm_real = denormalize(pred_real)
-            pred_denorm_imag = denormalize(pred_imag)
+            # 3. Reshape back to the original array shape (e.g. [10000, 1024])
+            pred_real = pred_real_flat.view_as(X_real).cpu().numpy()
+            pred_imag = pred_imag_flat.view_as(X_imag).cpu().numpy()
 
-            # done: denormalize before recombining
-            # Reconstruct complex signals
-            orig_complex = X_real.numpy() + 1j * X_imag.numpy()
-            clip_complex = Y_real.numpy() + 1j * Y_imag.numpy()
-            # pred_complex = pred_real + 1j * pred_imag
+            # 4. Denormalize using the exact physical limits from the dictionary!
+            pred_denorm_real = denormalize(pred_real, (X_r_min, X_r_max))
+            pred_denorm_imag = denormalize(pred_imag, (X_i_min, X_i_max))
+
+            # 5. Reconstruct complex signals
+            orig_complex = X_real.cpu().numpy() + 1j * X_imag.cpu().numpy()
+            clip_complex = Y_real.cpu().numpy() + 1j * Y_imag.cpu().numpy()
             pred_complex = pred_denorm_real + 1j * pred_denorm_imag
 
             all_original.append(orig_complex)
@@ -194,18 +209,31 @@ plot_ccdf_compare([orig_papr, clip_papr, pred_papr], f"Original vs Clipped vs {t
 plot_ccdf_compare([orig_cm, clip_cm, pred_cm], f"Original vs Clipped vs {title}", labels, metric="CM")
 
 # todo: find a way to embed the floor part into the plotting function
-# ! the size of data had an axis of size 10k, which i assume is samples_per_L
-y_axis_len = test_size * samples_per_L if not one_batch else samples_per_L
-y_axis = np.arange(y_axis_len, 0, -1) / y_axis_len
-papr_floor = np.where(y_axis == 1e-4)[0]
-cm_floor = np.where(y_axis == 1e-3)[0]
+# 1. Define the target y-levels (probabilities)
+papr_target_y = 1e-4
+cm_target_y = 1e-3
 
-papr_vlines = [np.sort(orig_papr)[papr_floor], np.sort(clip_papr)[papr_floor]]
-# papr_image_path = f'./nngraphs/{mod}_papr_{train_test_str}_{lr_str}.png'
+# 2. Convert CCDF y-level to a standard percentile (e.g., 1e-4 becomes 99.99)
+papr_percentile = (1.0 - papr_target_y) * 100.0
+cm_percentile = (1.0 - cm_target_y) * 100.0
+
+# 3. Extract the exact x-axis values (PAPR/CM) where the line cuts the graph
+# (This completely replaces the need for y_axis, np.where, and manual sorting!)
+papr_vlines = [
+    np.percentile(orig_papr, papr_percentile),
+    np.percentile(clip_papr, papr_percentile)
+]
+
+cm_vlines = [
+    np.percentile(orig_cm, cm_percentile),
+    np.percentile(clip_cm, cm_percentile)
+]
+
+# 4. Plot!
+# papr_image_path = os.path.join(graph_dir, f"{mod}_papr_{train_test_str}_{lr_str}.png")
 plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines)
 
-cm_vlines = [np.sort(orig_cm)[cm_floor], np.sort(clip_cm)[cm_floor]]
-# cm_image_path = f'./nngraphs/{mod}_cm_{train_test_str}_{lr_str}.png'
+# cm_image_path = os.path.join(graph_dir, f"{mod}_cm_{train_test_str}_{lr_str}.png")
 plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
 
 end = time.time()

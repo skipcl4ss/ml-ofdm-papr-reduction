@@ -1,9 +1,11 @@
 import numpy as np
 from ofdm.modem import qam16_mod, qpsk_mod
 from ofdm.candf import clip_time, oversample_time, filter_time
+from nnicf import normalize
+import torch
 from scipy import signal
-import time
 import os
+import time
 # import gc
 
 start = time.time()
@@ -31,6 +33,10 @@ fp = 1 / L
 b, a = signal.cheby1(N=4, rp=1, Wn=fp)
 
 # todo: implement scf
+# todo: see a way to add ber to the nnicf data so that we can use it in the loss function
+
+pt_dir = "./pt_dir/"
+os.makedirs(pt_dir, exist_ok=True)
 
 # tx = []
 # rx = []
@@ -58,6 +64,7 @@ for i in range(100):
         # # Scale by L to maintain power through the zero-padded IFFT
         # x_time = (np.fft.ifft(tx_symbols_oversampled) * L).astype(np.complex64)
 
+        # Oversample and convert to time domain
         x_time = oversample_time(tx_symbols, N, L)
 
         # separately store real and imag parts (needed to generate data for NN model training)
@@ -68,9 +75,9 @@ for i in range(100):
         for j in range(iterations):
             x_clipped = clip_time(x_time, cr)
 
-            # todo: retrain with filter_time()
+            # done: resave data using filter_time()
             x_time = filter_time(x_clipped, N)
-            # Filtering: use lfilter (or filtfilt for zero-phase)
+            # # Filtering: use lfilter (or filtfilt for zero-phase)
             # x_time = signal.lfilter(b, a, x_clipped).astype(np.complex64)
             # x_time = signal.filtfilt(b, a, x_clipped)
 
@@ -81,10 +88,34 @@ for i in range(100):
     tx_time = np.array(tx_time, dtype=np.float32)
     rx_time = np.array(rx_time, dtype=np.float32)
 
-    os.makedirs("data_npz", exist_ok=True)
-    # np.savez_compressed(f"data_npz/16qam_tx_rx_32_part_{i:02d}.npz", tx=tx_time, rx=rx_time)
-    np.savez_compressed(f"data_npz/qpsk_tx_rx_32_part_{i:02d}.npz", tx=tx_time, rx=rx_time)
-    del tx_time, rx_time
+    # -------------------------------------------------------------------------
+    # --- DIRECT IN-MEMORY NORMALIZATION & PYTORCH BUNDLING ---
+    # -------------------------------------------------------------------------
+
+    # Extract Real and Imaginary arrays and extract exact physical limits
+    X_real_norm, (X_r_min, X_r_max) = normalize(tx_time[0])
+    X_imag_norm, (X_i_min, X_i_max) = normalize(tx_time[1])
+    Y_real_norm, (Y_r_min, Y_r_max) = normalize(rx_time[0])
+    Y_imag_norm, (Y_i_min, Y_i_max) = normalize(rx_time[1])
+
+    # Save Real File as PyTorch Dictionary
+    torch.save({
+        'X_norm': torch.tensor(X_real_norm, dtype=torch.float32),
+        'Y_norm': torch.tensor(Y_real_norm, dtype=torch.float32),
+        'X_min': X_r_min, 'X_max': X_r_max,
+        'Y_min': Y_r_min, 'Y_max': Y_r_max
+    }, os.path.join(pt_dir, f"{mod}_tx_rx_32_part_{i:02d}_real.pt"))
+
+    # Save Imaginary File as PyTorch Dictionary
+    torch.save({
+        'X_norm': torch.tensor(X_imag_norm, dtype=torch.float32),
+        'Y_norm': torch.tensor(Y_imag_norm, dtype=torch.float32),
+        'X_min': X_i_min, 'X_max': X_i_max,
+        'Y_min': Y_i_min, 'Y_max': Y_i_max
+    }, os.path.join(pt_dir, f"{mod}_tx_rx_32_part_{i:02d}_imag.pt"))
+
+    # Manually delete variables to free RAM for the next iteration
+    del tx_time, rx_time, X_real_norm, X_imag_norm, Y_real_norm, Y_imag_norm
     # gc.collect()
 
     # tx.append(tx_chunk)

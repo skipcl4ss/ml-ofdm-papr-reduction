@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
-from ofdm.candf import oversample_time, clip_time
+from ofdm.candf import oversample_time, clip_time, filter_time
 from ofdm.plots import plot_ccdf_compare
 from ofdm.modem import qam16_mod
 from ofdm.metrics import calculate_papr
@@ -14,7 +14,7 @@ N = 1024            # Number of Subcarriers
 mid = N // 2
 L = 4               # Oversampling Factor
 N_fft = N * L       # IFFT Size (extended to 1024)
-CP = 32             # Cyclic Prefix
+# CP = 32             # Cyclic Prefix
 CP = N // 4             # Cyclic Prefix
 samples_per_L = 20000  # High samples_per_L to capture the 14dB tail
 # clipping_ratios = [0.8, 1.0, 1.2, 1.4, 1.6] # Clipping Ratios (CR)
@@ -38,7 +38,7 @@ clipping_ratios = [10 ** (1/20), 10 ** (3/20), 10 ** (5/20), 10 ** (7/20)] # Cli
 # --- 2. Filter Design (Section 9.3: Chebyshev Type I) ---
 # IIR Low-Pass Filter design
 fp = 1 / L
-b, a = signal.cheby1(N=4, rp=1, Wn=fp, btype='low', analog=False)
+b, a = signal.cheby1(N=4, rp=1, Wn=fp)
 
 # def calculate_papr(signal_time):
 #     peak = np.max(np.abs(signal_time) ** 2)
@@ -83,9 +83,10 @@ for _ in range(samples_per_L):
 
         x_clipped = clip_time(x_time, cr)
 
-        # todo: experiment with filter_time()
-        # 5. Filtering (The Proposed IIR Filter)
-        x_filtered = signal.lfilter(b, a, x_clipped)
+        # done: filter_time() is slightly better than lfilter, probable because this code is of one iteration as opposed to icf
+        x_filtered = filter_time(x_clipped, N)
+        # # 5. Filtering (The Proposed IIR Filter)
+        # x_filtered = signal.lfilter(b, a, x_clipped)
 
         # 6. Store Result
         clipped_papr_dict[cr].append(calculate_papr(x_filtered))

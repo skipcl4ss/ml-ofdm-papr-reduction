@@ -20,8 +20,8 @@ def ber_theoretical(EbNo_dB, M):
 def ccdf_theoretical(N, papr_dB_range):
     # CDF = (1 - e^(-z^2)) ^ N
     # CCDF = 1 - CDF
-    # ? i assume z = papr_dB_range / 20
-    gamma = 10 ** (papr_dB_range / 10) # ? is this z^2
+    # ? im assuming z = papr_dB_range / 20, therefore z^2 = papr_dB_range / 10
+    gamma = 10 ** (papr_dB_range / 10)
     ccdf = 1 - (1 - np.exp(-gamma)) ** N
     return ccdf
 
