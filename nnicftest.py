@@ -204,9 +204,11 @@ orig_cm, clip_cm, pred_cm = np.array(orig_cm), np.array(clip_cm), np.array(pred_
 # 6. Plot the CCDF
 title = f"NNICF Predicted OFDM\n{params}"
 labels = ['Original OFDM', 'Clipped OFDM', 'NNICF Predicted OFDM']
+papr_list = [orig_papr, clip_papr, pred_papr]
+cm_list = [orig_cm, clip_cm, pred_cm]
 
-plot_ccdf_compare([orig_papr, clip_papr, pred_papr], f"Original vs Clipped vs {title}", labels)
-plot_ccdf_compare([orig_cm, clip_cm, pred_cm], f"Original vs Clipped vs {title}", labels, metric="CM")
+plot_ccdf_compare(papr_list, f"Original vs Clipped vs {title}", labels)
+plot_ccdf_compare(cm_list, f"Original vs Clipped vs {title}", labels, metric="CM")
 
 # todo: find a way to embed the floor part into the plotting function
 # 1. Define the target y-levels (probabilities)

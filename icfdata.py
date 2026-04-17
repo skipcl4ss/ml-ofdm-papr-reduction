@@ -54,15 +54,6 @@ for i in range(100):
             # Generate QPSK Symbols
             tx_symbols = qpsk_mod(tx_data)
 
-        # done: use candf.py
-        # # Oversampling via Spectral Centering (Crucial for hitting 14dB)
-        # tx_symbols_oversampled = np.zeros(N_fft, dtype=np.complex64)
-        # tx_symbols_oversampled[:mid] = tx_symbols[:mid]
-        # tx_symbols_oversampled[-mid:] = tx_symbols[mid:]
-        #
-        # # IFFT to Time Domain (Capturing true analog peaks)
-        # # Scale by L to maintain power through the zero-padded IFFT
-        # x_time = (np.fft.ifft(tx_symbols_oversampled) * L).astype(np.complex64)
 
         # Oversample and convert to time domain
         x_time = oversample_time(tx_symbols, N, L)
@@ -117,9 +108,6 @@ for i in range(100):
     # Manually delete variables to free RAM for the next iteration
     del tx_time, rx_time, X_real_norm, X_imag_norm, Y_real_norm, Y_imag_norm
     # gc.collect()
-
-    # tx.append(tx_chunk)
-    # rx.append(rx_chunk)
 
     loop_end = time.time()
     print(f"Iteration {i + 1}/100 completed in {loop_end - loop_start:.2f} seconds")

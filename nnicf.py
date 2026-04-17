@@ -8,6 +8,7 @@ torch.set_num_threads(8)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Standard Mean Squared Error loss
+# todo: see how can i use loss function to reduce ber
 criterion = nn.MSELoss()
 
 # ! instead of returning only real or imag part of two datasets (tx and rx), returns only one part of one dataset

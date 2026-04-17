@@ -73,7 +73,7 @@ fp = 1 / L
 b, a = signal.cheby1(N=4, rp=1, Wn=fp)
 
 # Simulation
-papr_unclipped, cm_unclipped = [], []
+unclipped_papr, unclipped_cm = [], []
 iterations_papr = [[] for _ in range(iterations)]
 iterations_cm = [[] for _ in range(iterations)]
 
@@ -90,15 +90,6 @@ for _ in range(samples_per_L):
         # Generate QPSK Symbols
         tx_symbols = qpsk_mod(tx_data)
 
-    # done: use candf.py
-    # # Oversampling via Spectral Centering (Crucial for hitting 14dB)
-    # tx_symbols_oversampled = np.zeros(N_fft, dtype=np.complex64)
-    # tx_symbols_oversampled[:mid] = tx_symbols[:mid]
-    # tx_symbols_oversampled[-mid:] = tx_symbols[mid:]
-    #
-    # # IFFT to Time Domain (Capturing true analog peaks)
-    # # Scale by L to maintain power through the zero-padded IFFT
-    # x_time = (np.fft.ifft(tx_symbols_oversampled) * L).astype(np.complex64)
 
     # Oversample and convert to time domain
     x_time = oversample_time(tx_symbols, N, L)
@@ -108,8 +99,8 @@ for _ in range(samples_per_L):
     tx_time[1].append(np.imag(x_time).astype(np.float32, copy=False))
 
     # Capture Unclipped PAPR
-    papr_unclipped.append(calculate_papr(x_time))
-    cm_unclipped.append(calculate_cm(x_time))
+    unclipped_papr.append(calculate_papr(x_time))
+    unclipped_cm.append(calculate_cm(x_time))
 
     # Process C&F
     for i in range(iterations):
@@ -143,9 +134,6 @@ tx_imag, tx_minmax_imag = normalize(tx_time[1])
 
 # 3. Generate Predictions (No gradients needed for testing)
 with torch.no_grad():
-    # predicted_real = NN_Mod_Re(tx_real).numpy()
-    # predicted_imag = NN_Mod_Im(tx_imag).numpy()
-
     # Memoryless flattening
     X_real_flat = tx_real.view(-1, 1).to(device)
     X_imag_flat = tx_imag.view(-1, 1).to(device)
@@ -153,16 +141,10 @@ with torch.no_grad():
     predicted_real = NN_Mod_Re(X_real_flat).view_as(tx_real).cpu().numpy()
     predicted_imag = NN_Mod_Im(X_imag_flat).view_as(tx_imag).cpu().numpy()
 
-# predicted_real = torch.tensor(predicted_real, dtype=torch.float32)
-# predicted_imag = torch.tensor(predicted_imag, dtype=torch.float32)
 
-# pred_denorm_real = denormalize(predicted_real)
-# pred_denorm_imag = denormalize(predicted_imag)
 pred_denorm_real = denormalize(predicted_real, tx_minmax_real)
 pred_denorm_imag = denormalize(predicted_imag, tx_minmax_imag)
 
-# pred_denorm_real = np.array(pred_denorm_real)
-# pred_denorm_imag = np.array(pred_denorm_imag)
 
 # 4. Reconstruct the Complex OFDM Signals
 # each has shape of samples_per_L, (N * L)
@@ -178,11 +160,14 @@ pred_cm = np.array(pred_cm)
 
 # 6. Plot the CCDF
 title = f"NNICF Predicted OFDM\n{mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)\nlr = {lr} ({train_size} Training/{test_size} Testing)"
-labels = ['Original OFDM', f'Clipped OFDM ({iterations} iterations)', 'NNICF Predicted OFDM']
+labels = ['Original', f'Clipped ({iterations} iterations)', 'NNICF Predicted']
+papr_list = [unclipped_papr, iterations_papr[-1], pred_papr]
+cm_list = [unclipped_cm, iterations_cm[-1], pred_cm]
 
-plot_ccdf_compare([papr_unclipped, iterations_papr[-1], pred_papr], f"Original vs Clipped vs {title}", labels)
-plot_ccdf_compare([cm_unclipped, iterations_cm[-1], pred_cm], f"Original vs Clipped vs {title}", labels, metric="CM")
+plot_ccdf_compare(papr_list, f"Original vs Clipped vs {title}", labels)
+plot_ccdf_compare(cm_list, f"Original vs Clipped vs {title}", labels, metric="CM")
 
+# todo: find a way to embed the floor part into the plotting function
 # 1. Define the target y-levels (probabilities)
 papr_target_y = 1e-4
 cm_target_y = 1e-3
@@ -194,24 +179,40 @@ cm_percentile = (1.0 - cm_target_y) * 100.0
 # 3. Extract the exact x-axis values (PAPR/CM) where the line cuts the graph
 # (This completely replaces the need for y_axis, np.where, and manual sorting!)
 papr_vlines = [
-    np.percentile(papr_unclipped, papr_percentile),
+    np.percentile(unclipped_papr, papr_percentile),
     np.percentile(iterations_papr[-1], papr_percentile),
     np.percentile(pred_papr, papr_percentile)
 ]
 
 cm_vlines = [
-    np.percentile(cm_unclipped, cm_percentile),
+    np.percentile(unclipped_cm, cm_percentile),
     np.percentile(iterations_cm[-1], cm_percentile),
     np.percentile(pred_cm, cm_percentile)
 ]
+
+# y_axis = np.arange(samples_per_L, 0, -1) / samples_per_L
+# papr_floor = np.where(y_axis == 1e-4)[0]
+# papr_vlines = [np.sort(papr_unclipped)[papr_floor], np.sort(iterations_papr[-1])[papr_floor]]
+# plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines)
+#
+# cm_floor = np.where(y_axis == 1e-3)[0]
+# cm_vlines = [np.sort(cm_unclipped)[cm_floor], np.sort(iterations_cm[-1])[cm_floor]]
+
+# print(papr_percentile)
+# print(np.sort(unclipped_papr)[-1], np.percentile(unclipped_papr, papr_percentile))
+# print(np.sort(iterations_papr[-1])[-1], np.percentile(iterations_papr[-1], papr_percentile))
+# print(np.sort(pred_papr)[-1], np.percentile(pred_papr, papr_percentile))
+# print(np.sort(unclipped_papr)[-2], np.percentile(unclipped_papr, papr_percentile, method="nearest"))
+# print(np.sort(iterations_papr[-1])[-2], np.percentile(iterations_papr[-1], papr_percentile, method="nearest"))
+# print(np.sort(pred_papr)[-2], np.percentile(pred_papr, papr_percentile, method="nearest"))
 
 plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines)
 
 plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
 
 # labels = ["OG", "Clipped 1", "Clipped 2", "Clipped 3"]
-# plot_ccdf_compare([papr_unclipped, *iterations_papr], label=labels, metric="papr")
-# plot_ccdf_compare([cm_unclipped, *iterations_cm], label=labels, metric="cm")
+# plot_ccdf_compare([unclipped_papr, *iterations_papr], label=labels, metric="papr")
+# plot_ccdf_compare([unclipped_cm, *iterations_cm], label=labels, metric="cm")
 
 end = time.time()
 # ~8s

@@ -9,21 +9,15 @@ qam16_mapping  =  np.array([-3-3j, -3-1j, -3+3j, -3+1j,
                             +3-3j, +3-1j, +3+3j, +3+1j,
                             +1-3j, +1-1j, +1+3j, +1+1j])
 
-# done: the second array should be more accurate
-# # Gray mapping: 00,01,11,10 -> 1+1j, 1-1j, -1-1j, -1+1j
-# qpsk_mapping  =   np.array([ 1+1j,  1-1j,
-#                             -1-1j, -1+1j])
-# Gray mapping: 00,01,10,11 -> 1+1j, -1+1j, 1-1j, -1-1j
-qpsk_mapping  =   np.array([+1+1j, -1+1j,
-                            +1-1j, -1-1j])
-
 def qam16_mod(data, bits=False):
-    if bits:
-        # weights = 1 << np.arange(int(np.log2(M)) - 1, -1, -1, dtype=int)
-        weights = 1 << np.arange(int(np.log2(16)) - 1, -1, -1, dtype=int)
-        data = data.reshape(-1, int(np.log2(16)))
-        data = data.dot(weights)
+    # for if i ever want to embed the generation part
+    # data = np.random.randint(0, 2, n_bits)
     # data = np.random.randint(0, 16, n_symbols)
+    if bits:
+        # weights = 1 << np.arange(int(np.log2(M)) - 1, -1, -1)
+        groups = data.reshape(-1, int(np.log2(16)))  # first log2(16) bits per group
+        weights = 1 << np.arange(int(np.log2(16)) - 1, -1, -1)
+        data = groups @ weights
     symbols = qam16_mapping[data]
     # Normalize power to 1 (Average power of this 16-QAM constellation is 10)
     return symbols / np.sqrt(10)
@@ -46,13 +40,23 @@ def qam16_demod(rx_symbols, bits=False):
 
     return rx_data
 
+# done: the second array should be more accurate
+# # Gray mapping: 00,01,11,10 -> 1+1j, 1-1j, -1-1j, -1+1j
+# qpsk_mapping  =   np.array([ 1+1j,  1-1j,
+#                             -1-1j, -1+1j])
+# Gray mapping: 00,01,10,11 -> 1+1j, -1+1j, 1-1j, -1-1j
+qpsk_mapping  =   np.array([+1+1j, -1+1j,
+                            +1-1j, -1-1j])
+
 def qpsk_mod(data, bits=False):
-    if bits:
-        # weights = 1 << np.arange(int(np.log2(M)) - 1, -1, -1, dtype=int)
-        weights = 1 << np.arange(int(np.log2(4)) - 1, -1, -1, dtype=int)
-        data = data.reshape(-1, int(np.log2(4)))
-        data = data.dot(weights)
+    # for if i ever want to embed the generation part
+    # data = np.random.randint(0, 2, n_bits)
     # data = np.random.randint(0, 4, n_symbols)
+    if bits:
+        # weights = 1 << np.arange(int(np.log2(M)) - 1, -1, -1)
+        groups = data.reshape(-1, int(np.log2(4)))  # first log2(4) bits per group
+        weights = 1 << np.arange(int(np.log2(4)) - 1, -1, -1)
+        data = groups @ weights
     symbols = qpsk_mapping[data]
     # Normalize average power to 1 (each raw symbol has power 2)
     return symbols / np.sqrt(2)

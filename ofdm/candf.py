@@ -12,7 +12,8 @@ def clip_time(tx_time, CR):
     phase = np.angle(tx_time)
     rms = np.sqrt(np.mean(mag ** 2))
     A = CR * rms
-    clipped = np.where(mag <= A, tx_time, A * np.exp(1j * phase)) # ? why the phase
+    # ? why the phase
+    clipped = np.where(mag <= A, tx_time, A * np.exp(1j * phase))
     return clipped
 
 def oversample_time(freq_symbols, N, L):
