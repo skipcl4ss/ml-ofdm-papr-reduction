@@ -3,11 +3,11 @@ from ofdm.modem import qam16_mod, qpsk_mod
 from ofdm.candf import clip_time, oversample_time, filter_time
 from ofdm.metrics import calculate_papr, calculate_cm
 from ofdm.plots import plot_ccdf_compare, plot_ccdf
-from nnicf import NNICFMapper, normalize, denormalize
 import torch
-from scipy import signal
+from nnicf import NNICFMapper, normalize, denormalize
 import os
 import time
+# from scipy import signal
 
 start = time.time()
 
@@ -37,6 +37,10 @@ lr_str = "dot" + str(lr).split(".")[1]
 train_size = 80
 test_size = (100 - train_size) or 1
 train_test_str = f"{train_size}_{test_size}"
+# if train_size < 100:
+#     one_batch = None
+# elif train_size == 100:
+#     one_batch = "00"
 
 # model_dir = "./trained_models/"
 model_dir = "./new architecture/"
@@ -44,33 +48,22 @@ model_dir = "./new architecture/"
 # * Load nnicf model
 
 # 2. Load the trained models
-# Check if GPU is available and set device accordingly
+# Check for GPU availability and set device accordingly
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Instantiate the empty models
-# NN_Mod_Re = NNICFMapper(N_fft).to(device)
-# NN_Mod_Im = NNICFMapper(N_fft).to(device)
 NN_Mod_Re = NNICFMapper().to(device)
 NN_Mod_Im = NNICFMapper().to(device)
 
-# done: retest all current models after denormalization, didnt matter much tho as the models themselves were flawed from the start
 # Inject the trained weights
 NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{mod}_mod_re_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
 NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{mod}_mod_im_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
-# NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{mod}_mod_re_weights_{lr_str}.pth"), weights_only=True))
-# NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{mod}_mod_im_weights_{lr_str}.pth"), weights_only=True))
-# NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"mod_re_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
-# NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"mod_im_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
-# NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"mod_re_weights_{train_test_str}.pth"), weights_only=True))
-# NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"mod_im_weights_{train_test_str}.pth"), weights_only=True))
-# NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"mod_re_weights.pth"), weights_only=True))
-# NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"mod_im_weights.pth"), weights_only=True))
 
 NN_Mod_Re.eval()
 NN_Mod_Im.eval()
 
-# IIR Low-Pass Filter design (Chebyshev Type I)
-fp = 1 / L
-b, a = signal.cheby1(N=4, rp=1, Wn=fp)
+# # IIR Low-Pass Filter design (Chebyshev Type I)
+# fp = 1 / L
+# b, a = signal.cheby1(N=4, rp=1, Wn=fp)
 
 # Simulation
 unclipped_papr, unclipped_cm = [], []
@@ -89,7 +82,6 @@ for _ in range(samples_per_L):
     elif mod == "qpsk":
         # Generate QPSK Symbols
         tx_symbols = qpsk_mod(tx_data)
-
 
     # Oversample and convert to time domain
     x_time = oversample_time(tx_symbols, N, L)
@@ -190,26 +182,9 @@ cm_vlines = [
     np.percentile(pred_cm, cm_percentile)
 ]
 
-# y_axis = np.arange(samples_per_L, 0, -1) / samples_per_L
-# papr_floor = np.where(y_axis == 1e-4)[0]
-# papr_vlines = [np.sort(papr_unclipped)[papr_floor], np.sort(iterations_papr[-1])[papr_floor]]
+
 # plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines)
-#
-# cm_floor = np.where(y_axis == 1e-3)[0]
-# cm_vlines = [np.sort(cm_unclipped)[cm_floor], np.sort(iterations_cm[-1])[cm_floor]]
-
-# print(papr_percentile)
-# print(np.sort(unclipped_papr)[-1], np.percentile(unclipped_papr, papr_percentile))
-# print(np.sort(iterations_papr[-1])[-1], np.percentile(iterations_papr[-1], papr_percentile))
-# print(np.sort(pred_papr)[-1], np.percentile(pred_papr, papr_percentile))
-# print(np.sort(unclipped_papr)[-2], np.percentile(unclipped_papr, papr_percentile, method="nearest"))
-# print(np.sort(iterations_papr[-1])[-2], np.percentile(iterations_papr[-1], papr_percentile, method="nearest"))
-# print(np.sort(pred_papr)[-2], np.percentile(pred_papr, papr_percentile, method="nearest"))
-
-plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines)
-
-plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
-
+# plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
 # labels = ["OG", "Clipped 1", "Clipped 2", "Clipped 3"]
 # plot_ccdf_compare([unclipped_papr, *iterations_papr], label=labels, metric="papr")
 # plot_ccdf_compare([unclipped_cm, *iterations_cm], label=labels, metric="cm")

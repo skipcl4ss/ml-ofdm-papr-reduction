@@ -3,34 +3,32 @@ from ofdm.modem import qam16_mod
 from ofdm.candf import clip_time, oversample_time, filter_time
 from ofdm.metrics import calculate_papr
 from ofdm.plots import plot_ccdf_compare
-from scipy import signal
 import time
+from scipy import signal
 
 start = time.time()
 
-# --- Parameters (Section 9.1) ---
-N = 1024            # Number of Subcarriers
+# Parameters
+N = 1024                # Number of Subcarriers
 mid = N // 2
-L = 4               # Oversampling Factor
-N_fft = N * L       # IFFT Size (extended to 1024)
-# CP = 32             # Cyclic Prefix
+L = 4                   # Oversampling Factor
+N_fft = N * L           # IFFT Size (extended to 1024)
+# CP = 32               # Cyclic Prefix
 CP = N // 4             # Cyclic Prefix
-samples_per_L = 20000  # High samples_per_L to capture the 14dB tail
-# clipping_ratios = [0.8, 1.0, 1.2, 1.4, 1.6] # Clipping Ratios (CR)
-# clipping_ratios = [10 ** (1/10), 10 ** (3/10), 10 ** (5/10), 10 ** (7/10)] # Clipping Ratios (CR)
-clipping_ratios_dB = [1, 3, 5, 7]
-clipping_ratios = [10 ** (1/20), 10 ** (3/20), 10 ** (5/20), 10 ** (7/20)] # Clipping Ratios (CR)
+samples_per_L = 20000   # High value to capture the CCDF tail
+clipping_ratios_dB = [1, 3, 5, 7] # Clipping Ratios (CR)
+# clipping_ratios = [10 ** (dB/10) for dB in clipping_ratios_dB]  # Clipping Ratios (CR)
+clipping_ratios = [10 ** (dB/20) for dB in clipping_ratios_dB]  # Clipping Ratios (CR)
 
 # modulation scheme
 mod = "16qam"
 M = 16
 
-# IIR Low-Pass Filter design (Chebyshev Type I)
-fp = 1 / L
-b, a = signal.cheby1(N=4, rp=1, Wn=fp)
+# # IIR Low-Pass Filter design (Chebyshev Type I)
+# fp = 1 / L
+# b, a = signal.cheby1(N=4, rp=1, Wn=fp)
 
-
-# --- Simulation ---
+# Simulation
 unclipped_papr = []
 clipped_papr_dict = {cr: [] for cr in clipping_ratios}
 
@@ -38,7 +36,6 @@ for _ in range(samples_per_L):
     # 1. Generate 16-QAM Symbols
     tx_data = np.random.randint(0, M, N)
     tx_symbols = qam16_mod(tx_data)
-
 
     # Oversample and convert to time domain
     x_time = oversample_time(tx_symbols, N, L)
@@ -51,15 +48,16 @@ for _ in range(samples_per_L):
         # Clipping
         x_clipped = clip_time(x_time, cr)
 
-        # done: filter_time() is slightly better than lfilter, probable because this code is of one iteration as opposed to icf
         x_filtered = filter_time(x_clipped, N)
-        # # Filtering: use lfilter
-        # x_filtered = signal.lfilter(b, a, x_clipped)
+        # # Filtering: use lfilter (or filtfilt for zero-phase)
+        # x_time = signal.lfilter(b, a, x_clipped)
+        # ! did not test filtfilt yet
+        # x_time = signal.filtfilt(b, a, x_clipped)
 
-        # Store PAPR of the Result
+        # Store PAPR of the result
         clipped_papr_dict[cr].append(calculate_papr(x_filtered))
 
-# --- CCDF Calculation and Plotting ---
+# CCDF Calculation and Plotting
 
 cr_list = []
 for cr in clipping_ratios_dB:

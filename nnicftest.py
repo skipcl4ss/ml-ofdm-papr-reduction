@@ -1,11 +1,11 @@
-import os
 import numpy as np
+from ofdm.metrics import calculate_papr, calculate_cm
+from ofdm.plots import plot_ccdf, plot_ccdf_compare
 import torch
 from torch.utils.data import Dataset, DataLoader, Subset
-import time
-from ofdm.plots import plot_ccdf, plot_ccdf_compare
-from ofdm.metrics import calculate_papr, calculate_cm
 from nnicf import NNICFMapper, device, denormalize, criterion
+import os
+import time
 
 # -----------------------------------------------------------------------------
 
@@ -13,13 +13,13 @@ start = time.time()
 samples_per_L = 10000
 
 # Modulation scheme
-mod = "16qam"
-# mod = "qpsk"
+# mod = "16qam"
+mod = "qpsk"
 print(f"Using {mod.upper()} modulation technique")
 
 # Hyperparameters
 epochs = 100
-lr = 0.001 # originally 0.001
+lr = 0.001
 lr_str = "dot" + str(lr).split(".")[1]
 print(f"Hyperparameters: epochs = {epochs}, learning rate = {lr} ({lr_str} used in naming files), batch size = None (for now)")
 

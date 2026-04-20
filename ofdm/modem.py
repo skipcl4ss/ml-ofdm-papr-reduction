@@ -1,7 +1,6 @@
 import numpy as np
 
 # todo: see test.py and look for a way to generalize these functions
-# done: see if i could use np.unpackbits() instead of weight
 
 # Define 16-QAM and QPSK mappings
 qam16_mapping  =  np.array([-3-3j, -3-1j, -3+3j, -3+1j,
@@ -10,7 +9,7 @@ qam16_mapping  =  np.array([-3-3j, -3-1j, -3+3j, -3+1j,
                             +1-3j, +1-1j, +1+3j, +1+1j])
 
 def qam16_mod(data, bits=False):
-    # for if i ever want to embed the generation part
+    # # for if i ever want to embed the generation part
     # data = np.random.randint(0, 2, n_bits)
     # data = np.random.randint(0, 16, n_symbols)
     if bits:
@@ -40,16 +39,13 @@ def qam16_demod(rx_symbols, bits=False):
 
     return rx_data
 
-# done: the second array should be more accurate
-# # Gray mapping: 00,01,11,10 -> 1+1j, 1-1j, -1-1j, -1+1j
-# qpsk_mapping  =   np.array([ 1+1j,  1-1j,
-#                             -1-1j, -1+1j])
+# ! this array should be more accurate, each two consecutive values work as intended in terms of gray coding when used in the function
 # Gray mapping: 00,01,10,11 -> 1+1j, -1+1j, 1-1j, -1-1j
 qpsk_mapping  =   np.array([+1+1j, -1+1j,
                             +1-1j, -1-1j])
 
 def qpsk_mod(data, bits=False):
-    # for if i ever want to embed the generation part
+    # # for if i ever want to embed the generation part
     # data = np.random.randint(0, 2, n_bits)
     # data = np.random.randint(0, 4, n_symbols)
     if bits:
@@ -61,7 +57,6 @@ def qpsk_mod(data, bits=False):
     # Normalize average power to 1 (each raw symbol has power 2)
     return symbols / np.sqrt(2)
 
-# done: apparently is correct, even tho i just copied qam16_demod and changed accordingly
 def qpsk_demod(rx_symbols, bits=False):
     """Takes noisy QPSK symbols and returns the most likely integers (0-3)."""
     # 1. Un-normalize the received symbols back to the original grid

@@ -33,6 +33,7 @@ def emulate_awgn_channel(tx_time, CP, SNR_dB):
     rx_symbols = np.fft.fft(rx_ofdm)
     return rx_symbols
 
+# todo: update the docstring
 def clip_and_filter_ofdm(freq_symbols, N, L, CR):
     """
     Steps:

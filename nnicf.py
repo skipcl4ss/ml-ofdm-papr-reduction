@@ -24,7 +24,7 @@ def normalize(X_raw):
     return X_norm, (X_min, X_max)
 
 # ! should be used on real and imag separately
-# fixed: no longer gives the exact same values as pred_norm, since it now has access to the original data minmax
+# todo: gemini suggests using the min and max values of the whole training (not training+testing) dataset
 def denormalize(pred_norm, minmax):
     raw_min, raw_max = minmax
     pred_raw = ((pred_norm + 1.0) / 2.0) * (raw_max - raw_min) + raw_min if raw_max != raw_min else pred_norm
@@ -38,7 +38,7 @@ class TriangularActivation(nn.Module):
     def forward(self, x):
         return torch.clamp(1.0 - torch.abs(x), min=0.0)
 
-# done: experiment with changing this architecture
+# todo: try implementing Levenberg-Marguardt algorithm
 class NNICFMapper(nn.Module):
     def __init__(self):
         super(NNICFMapper, self).__init__()

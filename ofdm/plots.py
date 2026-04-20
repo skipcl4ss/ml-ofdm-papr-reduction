@@ -1,7 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 # import matplotlib.cm as cm
-# from metrics import ccdf_theoretical
+# from ofdm.metrics import ccdf_theoretical
+# from ofdm.metrics import ber_theoretical
 
 def ccdf_format(title, metric='PAPR', vlines=None):
     # Define boundaries
@@ -19,7 +20,6 @@ def ccdf_format(title, metric='PAPR', vlines=None):
         for vline in vlines:
             plt.axvline(x=vline, color='gray', alpha=0.4)
 
-    # plt.xlim([left, right])
     plt.ylim([bottom, 1])
 
     if title:
@@ -28,23 +28,6 @@ def ccdf_format(title, metric='PAPR', vlines=None):
     plt.axhline(y=1e-1, color='gray', alpha=0.4)
     plt.axhline(y=1e-2, color='gray', alpha=0.4)
     # plt.legend(loc='lower left')
-    # plt.tight_layout()
-
-def ber_format(EbNo_range, title):
-    plt.xlabel('E$_b/N$_0 [dB]')
-    plt.ylabel('BER')
-
-    if title:
-        plt.title(title)
-    plt.xlim([EbNo_range[0], EbNo_range[-1]])
-
-    # todo: implement ylim() in ber
-    plt.ylim([1e-4, 1e0])
-    # if mod == "16qam":
-    #     plt.ylim([1e-3, 1e0])
-    # elif mod == "qpsk":
-    #     plt.ylim([1e-4, 1e0])
-    plt.grid(True, which='both', linestyle='--', alpha=0.6)
     # plt.tight_layout()
 
 def plot_ccdf(vals, title=None, label=None, metric='PAPR', vlines=None, save=False):
@@ -61,7 +44,6 @@ def plot_ccdf(vals, title=None, label=None, metric='PAPR', vlines=None, save=Fal
     # ? why dont we use the theoretical CCDF function
     y_axis = np.arange(len(sorted_vals), 0, -1) / len(sorted_vals)
 
-    # Clipped (no filtering) -> keep solid; Clipped + Filtered -> dashed; others default solid
     plt.semilogy(sorted_vals, y_axis, linewidth=2, label=label)
 
     # all_data = np.concatenate([v for v in vals if v.size > 0]) if vals else np.array([])
@@ -104,40 +86,76 @@ def plot_ccdf_compare(val_list, title=None, label=None, metric='PAPR', save=Fals
         sorted_vals = np.sort(vals)
         y_axis = np.arange(len(sorted_vals), 0, -1) / len(sorted_vals)
 
-        # todo: Clipped (no filtering) -> keep solid; Clipped + Filtered -> dashed; others default
+        # todo: make different styles for clipped and filtered curves
         # plt.semilogy(sorted_vals, y_axis, color=colors[i], linewidth=2, label=label[i])
         plt.semilogy(sorted_vals, y_axis, linewidth=2, label=label[i])
 
-    # all_data = np.concatenate([v for v in val_list.values() if v.size > 0]) if val_list else np.array([])
-    # if all_data.size > 0:
-    #     x_theory = np.linspace(np.min(all_data), np.max(all_data) + 2, 200)
-    #     y_theory = ccdf_theoretical(N, x_theory)
-    #     plt.semilogy(x_theory, y_theory, 'k--', linewidth=1.5, label='Theoretical (L=1)')
+    # # theoretical part
+    # if metric.lower() == "papr":
+    #     plt.legend(loc='lower left')
+    #     all_data = np.concatenate([v for v in val_list if len(v) > 0]) if val_list else np.array([])
+    #     if all_data.size > 0:
+    #         x_theory = np.linspace(np.min(all_data), np.max(all_data) + 2, 200)
+    #         y_theory = ccdf_theoretical(N, x_theory)
+    #         plt.semilogy(x_theory, y_theory, 'k--', linewidth=1.5, label='Theoretical (L=1)')
 
     plt.xlim([left, right])
-    plt.legend(loc='lower left')
+    plt.legend(loc='lower left', ncol=2 if len(val_list) > 3 else 1)
     ccdf_format(title, metric)
     if save:
         plt.savefig(save, dpi=150)
     plt.show()
 
-# todo: complete the colors part
-def plot_ber(EbNo_range, val_list, title, label=None, save=False):
+def ber_format(title, M):
+    # Define boundaries
+    if M == 4:
+        right = 9
+        bottom = 1e-4
+    elif M == 16:
+        right = 16
+        bottom = 1e-3
+
+    plt.xlabel('E$_b$/N$_0$ [dB]')
+    plt.ylabel('BER')
+
+    if title:
+        plt.title(title)
+    plt.xlim([0, right])
+    plt.ylim([bottom, 1e0])
+
+    plt.grid(True, which='both', linestyle='--', alpha=0.6)
+    # plt.tight_layout()
+
+# todo: correct the legend order and try using cm
+def plot_ber(EbNo_range, val_list, title=None, label=None, M=4, save=False):
     plt.figure(figsize=(10, 7))
-    # colors = cm.viridis(np.linspace(0, 0.9, len(val_list)))
-    # colors = cm.plasma(np.linspace(0, 0.9, len(val_list)))
+    # filtered = cm.viridis(np.linspace(0, 0.9, iterations))
+    # clipped = cm.plasma(np.linspace(0, 0.9, iterations))
     if not label:
-        l = [f'Clipped Iteration {i}' for i in range(len(val_list))]
-        l += [f'Clipped + Filtered Iteration {i}' for i in range(len(val_list))]
-        label = ["Unclipped", "Theoretical"] + l
+        label = ["Unclipped"]
+        label += [f'Clipped Iteration {i + 1}' for i in range(len(val_list) // 2)]
+        label += [f'Clipped + Filtered Iteration {i + 1}' for i in range(len(val_list) // 2)]
+    if len(label) < len(val_list):
+        label.extend(["Unlabeled"] * (len(val_list) - len(label)))
 
     for i, vals in enumerate(val_list):
-        # todo: add theoretical part
-        # plt.semilogy(EbNo_range, val_list[i], color=colors[i], linewidth=2, label=label[i])
-        plt.semilogy(EbNo_range, vals, linewidth=2, label=label[i])
+        # if "filtered" in label[i].lower():
+        #     plt.semilogy(EbNo_range, vals, "o:", color=filtered[(i - 1 - corrector) // 2], linewidth=2, label=label[i])
+        # elif label[i].lower().startswith("clipped"):
+        #     plt.semilogy(EbNo_range, vals, "*-", color=clipped[(i - corrector) // 2], linewidth=2, label=label[i])
+        if "filtered" in label[i].lower():
+            plt.semilogy(EbNo_range, vals, "o:", linewidth=2, label=label[i])
+        elif label[i].lower().startswith("clipped"):
+            plt.semilogy(EbNo_range, vals, "*-", linewidth=2, label=label[i])
+        else:
+            plt.semilogy(EbNo_range, vals, "o-", linewidth=2, label=label[i])
 
-    plt.legend(loc='lower left')
-    ber_format(EbNo_range, title)
+    # # theoretical part
+    # y_theory = np.array([ber_theoretical(EbNo_dB, M) for EbNo_dB in EbNo_range])
+    # plt.semilogy(EbNo_range, y_theory, '--', color='black', linewidth=2, label='Theoretical')
+
+    plt.legend(loc='lower left', ncol=2 if len(val_list) > 3 else 1)
+    ber_format(title, M)
     if save:
         plt.savefig(save, dpi=150)
     plt.show()

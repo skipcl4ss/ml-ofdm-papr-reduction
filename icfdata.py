@@ -1,11 +1,11 @@
 import numpy as np
 from ofdm.modem import qam16_mod, qpsk_mod
 from ofdm.candf import clip_time, oversample_time, filter_time
-from nnicf import normalize
 import torch
-from scipy import signal
+from nnicf import normalize
 import os
 import time
+# from scipy import signal
 # import gc
 
 start = time.time()
@@ -28,9 +28,9 @@ M = 16
 # mod = "qpsk"
 # M = 4
 
-# IIR Low-Pass Filter design (Chebyshev Type I)
-fp = 1 / L
-b, a = signal.cheby1(N=4, rp=1, Wn=fp)
+# # IIR Low-Pass Filter design (Chebyshev Type I)
+# fp = 1 / L
+# b, a = signal.cheby1(N=4, rp=1, Wn=fp)
 
 # todo: implement scf
 # todo: see a way to add ber to the nnicf data so that we can use it in the loss function
@@ -54,7 +54,6 @@ for i in range(100):
             # Generate QPSK Symbols
             tx_symbols = qpsk_mod(tx_data)
 
-
         # Oversample and convert to time domain
         x_time = oversample_time(tx_symbols, N, L)
 
@@ -66,7 +65,6 @@ for i in range(100):
         for j in range(iterations):
             x_clipped = clip_time(x_time, cr)
 
-            # done: resave data using filter_time()
             x_time = filter_time(x_clipped, N)
             # # Filtering: use lfilter (or filtfilt for zero-phase)
             # x_time = signal.lfilter(b, a, x_clipped).astype(np.complex64)
@@ -79,9 +77,7 @@ for i in range(100):
     tx_time = np.array(tx_time, dtype=np.float32)
     rx_time = np.array(rx_time, dtype=np.float32)
 
-    # -------------------------------------------------------------------------
-    # --- DIRECT IN-MEMORY NORMALIZATION & PYTORCH BUNDLING ---
-    # -------------------------------------------------------------------------
+    # DIRECT IN-MEMORY NORMALIZATION & PYTORCH BUNDLING
 
     # Extract Real and Imaginary arrays and extract exact physical limits
     X_real_norm, (X_r_min, X_r_max) = normalize(tx_time[0])
