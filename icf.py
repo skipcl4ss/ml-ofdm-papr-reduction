@@ -31,6 +31,7 @@ M = 16
 
 # Hyperparameters (used only in saving and loading files, not in the actual C&F process)
 lr = 0.001
+# lr = 0.01
 lr_str = "dot" + str(lr).split(".")[1]
 
 # Data splitting (used only in saving and loading files, not in the actual C&F process)
@@ -41,6 +42,10 @@ train_test_str = f"{train_size}_{test_size}"
 #     one_batch = None
 # elif train_size == 100:
 #     one_batch = "00"
+
+# Optimizer
+opt = "Adam"
+# opt = "LBFGS"
 
 # model_dir = "./trained_models/"
 model_dir = "./new architecture/"
@@ -55,8 +60,10 @@ NN_Mod_Re = NNICFMapper().to(device)
 NN_Mod_Im = NNICFMapper().to(device)
 
 # Inject the trained weights
-NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{mod}_mod_re_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
-NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{mod}_mod_im_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
+NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_re_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
+NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_im_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
+# NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{mod}_mod_re_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
+# NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{mod}_mod_im_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
 
 NN_Mod_Re.eval()
 NN_Mod_Im.eval()
@@ -151,12 +158,12 @@ pred_papr = np.array(pred_papr)
 pred_cm = np.array(pred_cm)
 
 # 6. Plot the CCDF
-title = f"NNICF Predicted OFDM\n{mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)\nlr = {lr} ({train_size} Training/{test_size} Testing)"
+title = f"NNICF Predicted OFDM\n{opt} {mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)\nlr = {lr} ({train_size} Training/{test_size} Testing)"
 labels = ['Original', f'Clipped ({iterations} iterations)', 'NNICF Predicted']
 papr_list = [unclipped_papr, iterations_papr[-1], pred_papr]
 cm_list = [unclipped_cm, iterations_cm[-1], pred_cm]
 
-plot_ccdf_compare(papr_list, f"Original vs Clipped vs {title}", labels)
+# plot_ccdf_compare(papr_list, f"Original vs Clipped vs {title}", labels)
 plot_ccdf_compare(cm_list, f"Original vs Clipped vs {title}", labels, metric="CM")
 
 # todo: find a way to embed the floor part into the plotting function

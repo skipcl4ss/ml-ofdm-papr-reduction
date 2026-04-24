@@ -13,15 +13,23 @@ start = time.time()
 samples_per_L = 10000
 
 # Modulation scheme
-# mod = "16qam"
-mod = "qpsk"
+mod = "16qam"
+# mod = "qpsk"
 print(f"Using {mod.upper()} modulation technique")
 
 # Hyperparameters
 epochs = 100
+# using 0.001 for Adam and 0.01 for LBFGS as default values
 lr = 0.001
-lr_str = "dot" + str(lr).split(".")[1]
+# lr = 0.01
+lr_list = str(float(lr)).split(".")
+lr_str = f"dot{lr_list[1]}" if lr < 1 else f"{lr_list[0]}dot{lr_list[1]}"
 print(f"Hyperparameters: epochs = {epochs}, learning rate = {lr} ({lr_str} used in naming files), batch size = None (for now)")
+
+# Optimizer
+opt = "Adam"
+# opt = "LBFGS"
+print(f"Using {opt} optimizer")
 
 # Data splitting
 train_size = 80
@@ -36,16 +44,19 @@ print(f"dataset is split into {train_size} training files and {test_size} batche
 if train_size == 100:
     print("This 1 batch is of index 00, and was already used in training")
 
-batch_suffix = f" (Batch #{one_batch})" if one_batch else ""
-params = f"{mod.upper()} lr = {lr} ({train_size} Training/{test_size if not one_batch else 1} Testing){batch_suffix}"
+batch_suffix = f"(Batch #{one_batch})" if one_batch else ""
+params = f"{opt} optimizer {mod.upper()} lr = {lr} ({train_size} Training/{test_size if not one_batch else 1} Testing) {batch_suffix}"
 print(params)
 
-pt_dir = "./pt_dir/"
+og_pt_dir = "./pt_dir/"
+pt_dir = "./pt_dir_globalnorm/"
 model_dir = "./new architecture/"
 graph_dir = "./new architecture/"
+os.makedirs(og_pt_dir, exist_ok=True)
 os.makedirs(pt_dir, exist_ok=True)
 os.makedirs(model_dir, exist_ok=True)
 os.makedirs(graph_dir, exist_ok=True)
+print(og_pt_dir, "is the location of the original pt files before implementing the brand new normalization method suggested by gemini")
 print(f'"{pt_dir}", "{model_dir}", and "{graph_dir}" are the 3 locations for pt files, nn model weights and graphs respectively')
 
 # -----------------------------------------------------------------------------
@@ -82,8 +93,8 @@ class FastOFDMDataset(Dataset):
 Test_Mod_Re = NNICFMapper().to(device)
 Test_Mod_Im = NNICFMapper().to(device)
 
-Test_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{mod}_mod_re_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
-Test_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{mod}_mod_im_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
+Test_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_re_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
+Test_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_im_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
 
 Test_Mod_Re.eval()
 Test_Mod_Im.eval()
@@ -92,8 +103,8 @@ Test_Mod_Im.eval()
 
 if one_batch:
     # 2. Grab one batch of data to test (Load the dictionary packages)
-    pkg_real = torch.load(os.path.join(pt_dir, f"{mod}_tx_rx_32_part_{one_batch}_real.pt"), weights_only=False)
-    pkg_imag = torch.load(os.path.join(pt_dir, f"{mod}_tx_rx_32_part_{one_batch}_imag.pt"), weights_only=False)
+    pkg_real = torch.load(os.path.join(pt_dir, f"{opt}_{mod}_tx_rx_32_part_{one_batch}_real.pt"), weights_only=False)
+    pkg_imag = torch.load(os.path.join(pt_dir, f"{opt}_{mod}_tx_rx_32_part_{one_batch}_imag.pt"), weights_only=False)
     # Extract tensors
     test_X_real, test_Y_real = pkg_real['X_norm'], pkg_real['Y_norm']
     test_X_imag, test_Y_imag = pkg_imag['X_norm'], pkg_imag['Y_norm']
@@ -171,16 +182,16 @@ elif train_size < 100:
     avg_test_loss_real = test_loss_real / len(test_loader_real)
     avg_test_loss_imag = test_loss_imag / len(test_loader_imag)
 
-    print(f"\n--- Test Set Metrics ({test_size} Unseen Files) ---")
-    print(f"Average Real Module MSE Loss: {avg_test_loss_real:.6f}")
-    print(f"Average Imag Module MSE Loss: {avg_test_loss_imag:.6f}")
+    print(f'\n--- Test Set Metrics ({test_size} Unseen Files) ---')
+    print(f'Average Real Module MSE Loss: {avg_test_loss_real:.6f}')
+    print(f'Average Imag Module MSE Loss: {avg_test_loss_imag:.6f}')
 
     # 4. Concatenate the test_size batches into one massive array for evaluation
     original_complex = np.concatenate(all_original, axis=0)
     clipped_complex = np.concatenate(all_clipped, axis=0)
     predicted_complex = np.concatenate(all_predicted, axis=0)
 
-    print(f"Testing complete! Aggregated {test_size * samples_per_L} OFDM symbols.")
+    print(f'Testing complete! Aggregated {test_size * samples_per_L} OFDM symbols.')
 
 # -----------------------------------------------------------------------------
 
@@ -202,13 +213,13 @@ orig_papr, clip_papr, pred_papr = np.array(orig_papr), np.array(clip_papr), np.a
 orig_cm, clip_cm, pred_cm = np.array(orig_cm), np.array(clip_cm), np.array(pred_cm)
 
 # 6. Plot the CCDF
-title = f"NNICF Predicted OFDM\n{params}"
+title = f'NNICF Predicted OFDM\n{params}'
 labels = ['Original OFDM', 'Clipped OFDM', 'NNICF Predicted OFDM']
 papr_list = [orig_papr, clip_papr, pred_papr]
 cm_list = [orig_cm, clip_cm, pred_cm]
 
-plot_ccdf_compare(papr_list, f"Original vs Clipped vs {title}", labels)
-plot_ccdf_compare(cm_list, f"Original vs Clipped vs {title}", labels, metric="CM")
+# plot_ccdf_compare(papr_list, f'Original vs Clipped vs {title}', labels)
+plot_ccdf_compare(cm_list, f'Original vs Clipped vs {title}', labels, metric="CM")
 
 # todo: find a way to embed the floor part into the plotting function
 # 1. Define the target y-levels (probabilities)
@@ -231,11 +242,12 @@ cm_vlines = [
     np.percentile(clip_cm, cm_percentile)
 ]
 
-# 4. Plot!
-# papr_image_path = os.path.join(graph_dir, f"{mod}_papr_{train_test_str}_{lr_str}.png")
-plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines)
+# # 4. Plot!
+# # papr_image_path = os.path.join(graph_dir, f"{opt}_{mod}_papr_{train_test_str}_{lr_str}.png")
+# # plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines, save=papr_image_path)
+# plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines)
 
-# cm_image_path = os.path.join(graph_dir, f"{mod}_cm_{train_test_str}_{lr_str}.png")
+# cm_image_path = os.path.join(graph_dir, f"{opt}_{mod}_cm_{train_test_str}_{lr_str}.png")
 plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
 
 end = time.time()

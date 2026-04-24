@@ -34,6 +34,7 @@ M = 16
 
 # todo: implement scf
 # todo: see a way to add ber to the nnicf data so that we can use it in the loss function
+# todo: look for a way to reimplement normalization in another way
 
 pt_dir = "./pt_dir/"
 os.makedirs(pt_dir, exist_ok=True)
