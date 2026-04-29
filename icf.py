@@ -1,13 +1,12 @@
 import numpy as np
 from ofdm.modem import qam16_mod, qpsk_mod
-from ofdm.candf import clip_time, oversample_time, filter_time
+from ofdm.candf import oversample_time, clip_and_filter_time
 from ofdm.metrics import calculate_papr, calculate_cm
 from ofdm.plots import plot_ccdf_compare, plot_ccdf
 import torch
 from nnicf import NNICFMapper, normalize, denormalize
 import os
 import time
-# from scipy import signal
 
 start = time.time()
 
@@ -16,8 +15,8 @@ N = 256                 # Number of Subcarriers
 mid = N // 2
 L = 4                   # Oversampling Factor
 N_fft = N * L           # IFFT Size (extended to 1024)
-# ? is CP only needed in ber
-CP = N // 4             # Cyclic Prefix
+# ! CP is only needed in ber
+# CP = N // 4             # Cyclic Prefix
 samples_per_L = 10000   # High value to capture the CCDF tail
 cr_dB = 6
 cr = 10 ** (cr_dB / 20)
@@ -47,8 +46,8 @@ train_test_str = f"{train_size}_{test_size}"
 opt = "Adam"
 # opt = "LBFGS"
 
-# model_dir = "./trained_models/"
-model_dir = "./new architecture/"
+model_dir = "./trained_models/"
+# model_dir = "./new architecture/"
 
 # * Load nnicf model
 
@@ -68,20 +67,20 @@ NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_i
 NN_Mod_Re.eval()
 NN_Mod_Im.eval()
 
-# # IIR Low-Pass Filter design (Chebyshev Type I)
-# fp = 1 / L
-# b, a = signal.cheby1(N=4, rp=1, Wn=fp)
 
 # Simulation
 unclipped_papr, unclipped_cm = [], []
 iterations_papr = [[] for _ in range(iterations)]
 iterations_cm = [[] for _ in range(iterations)]
 
-# todo: implement scf
 # todo: plot time domain signal
+
+samples_per_L_minus_iterations_loop = 0
+iterations_loop = 0
 
 tx_time, rx_time = [[], []], [[], []]
 for _ in range(samples_per_L):
+    t1 = time.time()
     tx_data = np.random.randint(0, M, N)
     if mod == "16qam":
         # Generate 16-QAM Symbols
@@ -101,24 +100,24 @@ for _ in range(samples_per_L):
     unclipped_papr.append(calculate_papr(x_time))
     unclipped_cm.append(calculate_cm(x_time))
 
+    t2 = time.time()
+    samples_per_L_minus_iterations_loop += t2 - t1
     # Process C&F
     for i in range(iterations):
-        x_clipped = clip_time(x_time, cr)
-
-        # ! filter_time() is surprisingly better
-        x_time = filter_time(x_clipped, N)
-        # # Filtering: use lfilter (or filtfilt for zero-phase)
-        # x_time = signal.lfilter(b, a, x_clipped).astype(np.complex64)
-        # x_time = signal.filtfilt(b, a, x_clipped)
+        x_time, _ = clip_and_filter_time(x_time, cr, N)
 
         # Store PAPR of the current iterative result
         iterations_papr[i].append(calculate_papr(x_time))
         iterations_cm[i].append(calculate_cm(x_time))
+    t3 = time.time()
+    iterations_loop += t3 - t2
 
-        # store the final iteration's real and imag parts separately
-        if i == iterations - 1:
-            rx_time[0].append(np.real(x_time).astype(np.float32, copy=False))
-            rx_time[1].append(np.imag(x_time).astype(np.float32, copy=False))
+    # store the final iteration's real and imag parts separately
+    rx_time[0].append(np.real(x_time).astype(np.float32, copy=False))
+    rx_time[1].append(np.imag(x_time).astype(np.float32, copy=False))
+    t4 = time.time()
+    samples_per_L_minus_iterations_loop += t4 - t1
+
 tx_time = np.array(tx_time, dtype=np.float32)
 rx_time = np.array(rx_time, dtype=np.float32)
 
@@ -159,12 +158,14 @@ pred_cm = np.array(pred_cm)
 
 # 6. Plot the CCDF
 title = f"NNICF Predicted OFDM\n{opt} {mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)\nlr = {lr} ({train_size} Training/{test_size} Testing)"
-labels = ['Original', f'Clipped ({iterations} iterations)', 'NNICF Predicted']
+labels = ['Original', f'ICF ({iterations} iterations)', 'NNICF Predicted']
 papr_list = [unclipped_papr, iterations_papr[-1], pred_papr]
 cm_list = [unclipped_cm, iterations_cm[-1], pred_cm]
 
-# plot_ccdf_compare(papr_list, f"Original vs Clipped vs {title}", labels)
-plot_ccdf_compare(cm_list, f"Original vs Clipped vs {title}", labels, metric="CM")
+# plot_ccdf_compare(papr_list, f"Original vs ICF vs {title}", labels)
+plot_ccdf_compare(cm_list, f"Original vs ICF vs {title}", labels, metric="CM")
+
+# fixme: both percentile and max are not the most effecient solution
 
 # todo: find a way to embed the floor part into the plotting function
 # 1. Define the target y-levels (probabilities)
@@ -189,15 +190,23 @@ cm_vlines = [
     np.percentile(pred_cm, cm_percentile)
 ]
 
+# cm_vlines = [
+#     np.max(unclipped_cm),
+#     np.max(iterations_cm),
+#     np.max(pred_cm)
+# ]
 
 # plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines)
 # plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
-# labels = ["OG", "Clipped 1", "Clipped 2", "Clipped 3"]
+# labels = ["OG", "ICF 1", "ICF 2", "ICF 3"]
 # plot_ccdf_compare([unclipped_papr, *iterations_papr], label=labels, metric="papr")
 # plot_ccdf_compare([unclipped_cm, *iterations_cm], label=labels, metric="cm")
 
 end = time.time()
 # ~8s
-print(f"\nICF execution time: {middle - start:.2f} seconds")
-print(f"\nNNICF execution time: {end - middle:.2f} seconds")
-print(f"\nTotal execution time: {end - start:.2f} seconds")
+print(f"ICF execution time: {middle - start:.2f} seconds")
+print(f"NNICF execution time: {end - middle:.2f} seconds")
+print(f"Total execution time: {end - start:.2f} seconds")
+print()
+print("time taken in the inner iterations loop:", iterations_loop)
+print("time taken in outer samples_per_L loop:", samples_per_L_minus_iterations_loop)

@@ -1,14 +1,12 @@
 import numpy as np
 from ofdm.modem import qam16_mod, qpsk_mod, qam16_demod, qpsk_demod
-from ofdm.candf import clip_time, clip_and_filter_ofdm, oversample_time, emulate_awgn_channel
+from ofdm.candf import oversample_time, clip_and_filter_time, emulate_awgn_channel
 from ofdm.metrics import ber_theoretical
 from ofdm.plots import plot_ber
 import torch
 from nnicf import NNICFMapper, normalize, denormalize
 import os
 import time
-# from scipy import signal
-# import matplotlib.pyplot as plt
 
 start = time.time()
 
@@ -47,8 +45,8 @@ train_test_str = f"{train_size}_{test_size}"
 opt = "Adam"
 # opt = "LBFGS"
 
-# model_dir = "./trained_models/"
-model_dir = "./new architecture/"
+model_dir = "./trained_models/"
+# model_dir = "./new architecture/"
 
 # * Load nnicf model
 
@@ -68,20 +66,22 @@ NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_i
 NN_Mod_Re.eval()
 NN_Mod_Im.eval()
 
-# # IIR Low-Pass Filter design (Chebyshev Type I)
-# fp = 1 / L
-# b, a = signal.cheby1(N=4, rp=1, Wn=fp)
 
+ber_theory_list = []
 BER_results = {
     'no_clipping': [],
     'predicted': []
 }
-
-ber_theory_list = []
-
 for i in range(1, iterations + 1):
     BER_results[f'clipped_iteration {i}'] = []
     BER_results[f'clipped_filtered_iteration {i}'] = []
+
+# todo: make variable names more consistent
+
+EbNo_minus_num_symb_loop = 0
+num_symb_minus_iterations_loop_minus_nn = 0
+iterations_loop = 0
+nn_calc_time = 0
 
 # edits the stops to be same as the paper
 if mod == "16qam":
@@ -91,9 +91,8 @@ elif mod == "qpsk":
 EbNo_range = np.arange(0, stop + 1, 1) # does not affect ccdf
 bits_per_symbol = int(np.log2(M))
 num_symb = 100
-
-
 for EbNo_dB in EbNo_range:
+    t1 = time.time()
     # ! the ratio at the en is to represent the loss done by the CP
     SNR_dB = EbNo_dB + 10 * np.log10(bits_per_symbol * (N / (N + CP)))
     # Counters for bit errors
@@ -103,8 +102,11 @@ for EbNo_dB in EbNo_range:
     bit_error_filtered = {i: 0 for i in range(1, iterations + 1)}
     total_bits = 0
 
+    t2 = time.time()
+    EbNo_minus_num_symb_loop += t2 - t1
     for _ in range(num_symb):
     # for _ in range(1):
+        t3 = time.time()
         # Generate random bits and modulate
         tx_bits = np.random.randint(0, 2, int(N * bits_per_symbol))
 
@@ -130,15 +132,19 @@ for EbNo_dB in EbNo_range:
         # todo: maybe this loop could be cleaned up
         tx_time_oversampled_base = oversample_time(tx_symbols, N, L)
         # Process each iteration
+
+        t4 = time.time()
+        num_symb_minus_iterations_loop_minus_nn += t4 - t3
         for i in range(1, iterations + 1):
             # Get clipped signal (no filtering)
             tx_time_oversampled = oversample_time(tx_symbols, N, L)
-            clipped_time = clip_time(tx_time_oversampled, cr)
+            clipped_filtered_time, clipped_time = clip_and_filter_time(tx_time_oversampled, cr, N)
+            # clipped_time = clip_time(tx_time_oversampled, cr)
 
-            # Downsample back to original rate (take every L-th sample)
-            clipped_downsampled = clipped_time[::L]
+            # # Downsample back to original rate (take every L-th sample)
+            # clipped_downsampled = clipped_time[::L]
 
-            rx_symbols_clipped = emulate_awgn_channel(clipped_downsampled, CP, SNR_dB)
+            rx_symbols_clipped = emulate_awgn_channel(clipped_time, CP, SNR_dB, L)
 
             if mod == "16qam":
                 rx_bits_clipped = qam16_demod(rx_symbols_clipped, bits=True)
@@ -147,17 +153,13 @@ for EbNo_dB in EbNo_range:
 
             bit_error_clipped[i] += np.sum(tx_bits != rx_bits_clipped)
 
-            # ! lfilter() simply does not work, and filtfilt() plot is slightly worse than clipped
-            # symb = clip_time(oversample_time(tx_symbols, N, L), cr)
-            # # clipped_filtered_time = signal.lfilter(b, a, symb).astype(np.complex64)
-            # # clipped_filtered_time = signal.filtfilt(b, a, symb)
-            # filtered_downsampled = clipped_filtered_time[::L]
 
             # Get clipped + filtered signal
-            clipped_filtered_time = clip_and_filter_ofdm(tx_symbols, N, L, cr)
+            # clipped_filtered_time, _ = clip_and_filter_time(tx_time_oversampled, cr, N)
             filtered_downsampled = clipped_filtered_time[::L]
 
-            rx_symbols_filtered = emulate_awgn_channel(filtered_downsampled, CP, SNR_dB)
+            # rx_symbols_filtered = emulate_awgn_channel(filtered_downsampled, CP, SNR_dB)
+            rx_symbols_filtered = emulate_awgn_channel(clipped_filtered_time, CP, SNR_dB, L)
 
             if mod == "16qam":
                 rx_bits_filtered = qam16_demod(rx_symbols_filtered, bits=True)
@@ -167,11 +169,13 @@ for EbNo_dB in EbNo_range:
             bit_error_filtered[i] += np.sum(tx_bits != rx_bits_filtered)
 
             # ? why not rx_symbols_filtered
-            tx_symbols = np.fft.fft(filtered_downsampled, N)
+            tx_symbols = np.fft.fft(filtered_downsampled)
             # tx_symbols = rx_symbols_filtered
-            # tx_symbols = np.fft.fft(filtered_downsampled)
+        t5 = time.time()
+        iterations_loop += t5 - t4
 
         # 1. Normalize the data and turn it to torch tensors
+        # ? why tx_time_oversampled_base
         tx_real, minmax_real = normalize(tx_time_oversampled_base.real)
         tx_imag, minmax_imag = normalize(tx_time_oversampled_base.imag)
 
@@ -199,8 +203,8 @@ for EbNo_dB in EbNo_range:
 
         predicted_complex = pred_denorm_real + 1j * pred_denorm_imag
 
-        predicted_downsampled = predicted_complex[::L]
-        predicted_symbols = emulate_awgn_channel(predicted_downsampled, CP, SNR_dB)
+        # predicted_downsampled = predicted_complex[::L]
+        predicted_symbols = emulate_awgn_channel(predicted_complex, CP, SNR_dB, L)
 
         if mod == "16qam":
             predicted_bits = qam16_demod(predicted_symbols, bits=True)
@@ -210,6 +214,9 @@ for EbNo_dB in EbNo_range:
         bit_error_predicted += np.sum(tx_bits != predicted_bits)
 
         total_bits += len(tx_bits)
+        t6 = time.time()
+        nn_calc_time += t6 - t5
+    t7 = time.time()
 
     # Calculate BER for this Eb/No
     ber_no_clip = bit_error_no_clip / total_bits
@@ -224,8 +231,11 @@ for EbNo_dB in EbNo_range:
         ber_filtered = bit_error_filtered[i] / total_bits
         BER_results[f'clipped_iteration {i}'].append(ber_clipped)
         BER_results[f'clipped_filtered_iteration {i}'].append(ber_filtered)
+        # ber_theory_list.append(ber_theory)
 
     print(f"  Eb/No: {EbNo_dB:.2f} dB | BER (No clip): {ber_no_clip:.6f} | BER (Theory): {ber_theory:.6f}")
+    t8 = time.time()
+    EbNo_minus_num_symb_loop += t8 - t7
 
 # Plot BER curves
 title = f"BER vs SNR\n{opt} {mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)\nlr = {lr} ({train_size} Training/{test_size} Testing)"
@@ -249,3 +259,8 @@ end = time.time()
 # ~s (num_symb = 1)
 # ~3s (num_symb = 100)
 print(f"\nTotal execution time: {end - start:.2f} seconds")
+print()
+print("time taken in the inner iterations loop:", iterations_loop)
+print("time taken in the nnicf calculations:", nn_calc_time)
+print("time taken in the middle iterations loop:", num_symb_minus_iterations_loop_minus_nn)
+print("time taken in outer EbNo loop loop:", EbNo_minus_num_symb_loop)

@@ -50,7 +50,8 @@ print(params)
 
 og_pt_dir = "./pt_dir/"
 pt_dir = "./pt_dir_globalnorm/"
-model_dir = "./new architecture/"
+model_dir = "./trained_models/"
+# model_dir = "./new architecture/"
 graph_dir = "./new architecture/"
 os.makedirs(og_pt_dir, exist_ok=True)
 os.makedirs(pt_dir, exist_ok=True)
@@ -103,8 +104,8 @@ Test_Mod_Im.eval()
 
 if one_batch:
     # 2. Grab one batch of data to test (Load the dictionary packages)
-    pkg_real = torch.load(os.path.join(pt_dir, f"{opt}_{mod}_tx_rx_32_part_{one_batch}_real.pt"), weights_only=False)
-    pkg_imag = torch.load(os.path.join(pt_dir, f"{opt}_{mod}_tx_rx_32_part_{one_batch}_imag.pt"), weights_only=False)
+    pkg_real = torch.load(os.path.join(pt_dir, f"{mod}_tx_rx_32_part_{one_batch}_real.pt"), weights_only=False)
+    pkg_imag = torch.load(os.path.join(pt_dir, f"{mod}_tx_rx_32_part_{one_batch}_imag.pt"), weights_only=False)
     # Extract tensors
     test_X_real, test_Y_real = pkg_real['X_norm'], pkg_real['Y_norm']
     test_X_imag, test_Y_imag = pkg_imag['X_norm'], pkg_imag['Y_norm']
@@ -214,12 +215,14 @@ orig_cm, clip_cm, pred_cm = np.array(orig_cm), np.array(clip_cm), np.array(pred_
 
 # 6. Plot the CCDF
 title = f'NNICF Predicted OFDM\n{params}'
-labels = ['Original OFDM', 'Clipped OFDM', 'NNICF Predicted OFDM']
+labels = ['Original OFDM', 'ICF', 'NNICF Predicted OFDM']
 papr_list = [orig_papr, clip_papr, pred_papr]
 cm_list = [orig_cm, clip_cm, pred_cm]
 
-# plot_ccdf_compare(papr_list, f'Original vs Clipped vs {title}', labels)
-plot_ccdf_compare(cm_list, f'Original vs Clipped vs {title}', labels, metric="CM")
+# plot_ccdf_compare(papr_list, f'Original vs ICF vs {title}', labels)
+plot_ccdf_compare(cm_list, f'Original vs ICF vs {title}', labels, metric="CM")
+
+# fixme: both percentile and max are not the most effecient solution
 
 # todo: find a way to embed the floor part into the plotting function
 # 1. Define the target y-levels (probabilities)
@@ -234,13 +237,21 @@ cm_percentile = (1.0 - cm_target_y) * 100.0
 # (This completely replaces the need for y_axis, np.where, and manual sorting!)
 papr_vlines = [
     np.percentile(orig_papr, papr_percentile),
-    np.percentile(clip_papr, papr_percentile)
+    np.percentile(clip_papr, papr_percentile),
+    np.percentile(pred_papr, papr_percentile)
 ]
 
 cm_vlines = [
     np.percentile(orig_cm, cm_percentile),
-    np.percentile(clip_cm, cm_percentile)
+    np.percentile(clip_cm, cm_percentile),
+    np.percentile(pred_cm, cm_percentile)
 ]
+
+# cm_vlines = [
+#     np.max(orig_cm),
+#     np.max(clip_cm),
+#     np.max(pred_cm)
+# ]
 
 # # 4. Plot!
 # # papr_image_path = os.path.join(graph_dir, f"{opt}_{mod}_papr_{train_test_str}_{lr_str}.png")

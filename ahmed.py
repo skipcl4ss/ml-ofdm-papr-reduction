@@ -327,7 +327,7 @@ def main():
     else:
         modem = QAMModem(M)
 
-    # todo: needs to be fixed to support multiple L values
+    # todo: add support to multiple L values
     L = L_values[0]  # Oversampling factor
 
     BER_results = {

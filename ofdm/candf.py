@@ -1,5 +1,17 @@
 import numpy as np
-from ofdm.awgn import awgn
+
+def awgn(tx_signal, SNR_dB):
+    """Adds AWGN to a complex signal given a target SNR in dB."""
+    # Calculate average signal power
+    signal_power = np.mean(np.abs(tx_signal)**2)
+    # Calculate required noise power
+    SNR_linear = 10 ** (SNR_dB / 10)
+    noise_power = signal_power / SNR_linear
+
+    # Generate complex Gaussian noise
+    noise_std = np.sqrt(noise_power / 2)
+    noise = noise_std * (np.random.randn(len(tx_signal)) + 1j * np.random.randn(len(tx_signal)))
+    return tx_signal + noise
 
 def clip_time(tx_time, CR):
     """
@@ -25,8 +37,11 @@ def oversample_time(freq_symbols, N, L):
     tx_time_oversampled = np.fft.ifft(oversampled_freq) * L
     return tx_time_oversampled
 
-def emulate_awgn_channel(tx_time, CP, SNR_dB):
+def emulate_awgn_channel(tx_time, CP, SNR_dB, downsample=None):
     # Downsample back to original rate (take every L-th sample)
+    if downsample != None:
+        tx_time = tx_time[::downsample]
+
     tx_signal = np.concatenate([tx_time[-CP:], tx_time])
     rx_signal = awgn(tx_signal, SNR_dB)
     rx_ofdm = rx_signal[CP:]
@@ -34,7 +49,7 @@ def emulate_awgn_channel(tx_time, CP, SNR_dB):
     return rx_symbols
 
 # todo: update the docstring
-def clip_and_filter_ofdm(freq_symbols, N, L, CR):
+def clip_and_filter_time(tx_time_oversampled, CR, N):
     """
     Steps:
       1) Create oversampled frequency vector by inserting zeros (L-1)*N in middle
@@ -45,12 +60,11 @@ def clip_and_filter_ofdm(freq_symbols, N, L, CR):
     Returns:
       tuple(original_oversampled_time, clipped_time_no_filter, clipped_filtered_time)
     """
-    tx_time_oversampled = oversample_time(freq_symbols, N, L)
     # soft clipping (no filtering)
     clipped_time = clip_time(tx_time_oversampled, CR)
     clipped_filtered_time = filter_time(clipped_time, N)
 
-    return clipped_filtered_time
+    return clipped_filtered_time, clipped_time
 
 def filter_time(clipped_time, N):
     mid = N // 2

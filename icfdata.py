@@ -1,12 +1,10 @@
 import numpy as np
 from ofdm.modem import qam16_mod, qpsk_mod
-from ofdm.candf import clip_time, oversample_time, filter_time
+from ofdm.candf import oversample_time, clip_and_filter_time
 import torch
 from nnicf import normalize
 import os
 import time
-# from scipy import signal
-# import gc
 
 start = time.time()
 
@@ -15,8 +13,8 @@ N = 256                 # Number of Subcarriers
 mid = N // 2
 L = 4                   # Oversampling Factor
 N_fft = N * L           # IFFT Size (extended to 1024)
-# ? is CP only needed in ber
-CP = N // 4             # Cyclic Prefix
+# ! CP is only needed in ber
+# CP = N // 4             # Cyclic Prefix
 samples_per_L = 10000   # High value to capture the CCDF tail
 cr_dB = 6
 cr = 10 ** (cr_dB / 20)
@@ -28,25 +26,23 @@ M = 16
 # mod = "qpsk"
 # M = 4
 
-# # IIR Low-Pass Filter design (Chebyshev Type I)
-# fp = 1 / L
-# b, a = signal.cheby1(N=4, rp=1, Wn=fp)
 
-# todo: implement scf
 # todo: see a way to add ber to the nnicf data so that we can use it in the loss function
-# todo: look for a way to reimplement normalization in another way
 
 pt_dir = "./pt_dir/"
 os.makedirs(pt_dir, exist_ok=True)
 
-# tx = []
-# rx = []
+hundred_minus_samples_per_L_loop = 0
+samples_per_L_minus_iterations_loop = 0
+iterations_loop = 0
+
+# tx, rx = [], []
 before_loop = time.time()
 for i in range(100):
     loop_start = time.time() if i else before_loop
-
     tx_time, rx_time = [[], []], [[], []]
     for _ in range(samples_per_L):
+        t1 = time.time()
         tx_data = np.random.randint(0, M, N)
         if mod == "16qam":
             # Generate 16-QAM Symbols
@@ -62,19 +58,21 @@ for i in range(100):
         tx_time[0].append(np.real(x_time).astype(np.float32, copy=False))
         tx_time[1].append(np.imag(x_time).astype(np.float32, copy=False))
 
+        t2 = time.time()
+        samples_per_L_minus_iterations_loop += t2 - t1
         # Process C&F
         for j in range(iterations):
-            x_clipped = clip_time(x_time, cr)
+            x_time, _ = clip_and_filter_time(x_time, cr, N)
+        t3 = time.time()
+        iterations_loop += t3 - t2
 
-            x_time = filter_time(x_clipped, N)
-            # # Filtering: use lfilter (or filtfilt for zero-phase)
-            # x_time = signal.lfilter(b, a, x_clipped).astype(np.complex64)
-            # x_time = signal.filtfilt(b, a, x_clipped)
+        # store the final iteration's real and imag parts separately
+        rx_time[0].append(np.real(x_time).astype(np.float32, copy=False))
+        rx_time[1].append(np.imag(x_time).astype(np.float32, copy=False))
+        t4 = time.time()
+        samples_per_L_minus_iterations_loop += t4 - t1
+    t5 = time.time()
 
-            # store the final iteration's real and imag parts separately
-            if j == iterations - 1:
-                rx_time[0].append(np.real(x_time).astype(np.float32, copy=False))
-                rx_time[1].append(np.imag(x_time).astype(np.float32, copy=False))
     tx_time = np.array(tx_time, dtype=np.float32)
     rx_time = np.array(rx_time, dtype=np.float32)
 
@@ -109,7 +107,13 @@ for i in range(100):
     loop_end = time.time()
     print(f"Iteration {i + 1}/100 completed in {loop_end - loop_start:.2f} seconds")
     print(f"{loop_end - before_loop:.2f} seconds passed since before loop start")
+    t6 = time.time()
+    hundred_minus_samples_per_L_loop += t6 - t5
 
 end = time.time()
 # ~
 print(f"\nTotal execution time: {end - start:.2f} seconds")
+print()
+print("time taken in the inner iterations loop:", iterations_loop)
+print("time taken in middle samples_per_L loop:", samples_per_L_minus_iterations_loop)
+print("time taken in outer 100 iterations loop:", hundred_minus_samples_per_L_loop)
