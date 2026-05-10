@@ -23,10 +23,10 @@ cr = 10 ** (cr_dB / 20)
 iterations = 3
 
 # modulation scheme
-mod = "16qam"
-M = 16
-# mod = "qpsk"
-# M = 4
+# mod = "16qam"
+# M = 16
+mod = "qpsk"
+M = 4
 
 # Hyperparameters (used only in saving and loading files, not in the actual C&F process)
 lr = 0.001
@@ -36,19 +36,19 @@ lr_str = "dot" + str(lr).split(".")[1]
 # Data splitting (used only in saving and loading files, not in the actual C&F process)
 train_size = 70
 val_size = 10
-# test_size = 100 - train_size
 test_size = 100 - train_size - val_size
 if test_size:
     one_batch = None
 else:
     test_size = 1
     one_batch = "00"
-# train_test_str = f"{train_size}_{test_size}"
-train_val_test_str = f"{train_size}_{val_size}_{test_size}"
+train_val_test_str = f"{train_size}_{val_size}_{test_size}" if val_size else f"{train_size}_{test_size}"
 
 # Optimizer
 opt = "Adam"
 # opt = "LBFGS"
+
+params = f"{opt} optimizer {mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)\nlr = {lr} ({train_size} Training/{val_size} Validation/{test_size} Testing)"
 
 # model_dir = "./trained_models/"
 model_dir = "./new architecture/"
@@ -65,8 +65,6 @@ NN_Mod_Im = NNICFMapper().to(device)
 # Inject the trained weights
 NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
 NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
-# NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{mod}_mod_re_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
-# NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{mod}_mod_im_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
 
 NN_Mod_Re.eval()
 NN_Mod_Im.eval()
@@ -172,7 +170,7 @@ pred_papr = np.array(pred_papr)
 pred_cm = np.array(pred_cm)
 
 # 6. Plot the CCDF
-title = f"NNICF Predicted OFDM\n{opt} {mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)\nlr = {lr} ({train_size} Training/{test_size} Testing)"
+title = f"NNICF Predicted OFDM\n{params}"
 labels = ['Original', f'ICF ({iterations} iteration{"s" if iterations > 1 else ""})', 'NNICF Predicted']
 papr_list = [unclipped_papr, iterations_papr[-1], pred_papr]
 cm_list = [unclipped_cm, iterations_cm[-1], pred_cm]
@@ -219,9 +217,9 @@ cm_vlines = [
 
 end = time.time()
 # ~8s
+print(f"Total execution time: {end - start:.2f} seconds")
 print(f"ICF execution time: {middle - start:.2f} seconds")
 print(f"NNICF execution time: {end - middle:.2f} seconds")
-print(f"Total execution time: {end - start:.2f} seconds")
 print()
 print("time taken in the inner iterations loop:", iterations_loop)
 print("time taken in outer samples_per_L loop:", samples_per_L_minus_iterations_loop)

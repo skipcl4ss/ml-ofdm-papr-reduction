@@ -9,7 +9,14 @@ import time
 
 # -----------------------------------------------------------------------------
 
+# Explicitly tell PyTorch to utilize your 8 CPU cores for matrix math
+# Check for GPU availability to drastically speed up training
+# ! cuda is available only on nvidia gpu
+print(f"PyTorch using {torch.get_num_threads()} threads on {device}")
+
+# -----------------------------------------------------------------------------
 start = time.time()
+
 samples_per_L = 10000
 
 # Modulation scheme
@@ -34,26 +41,23 @@ print(f"Using {opt} optimizer")
 # Data splitting
 train_size = 70
 val_size = 10
-# test_size = 100 - train_size
 test_size = 100 - train_size - val_size
 if test_size:
     one_batch = None
 else:
     test_size = 1
     one_batch = "00"
-# train_test_str = f"{train_size}_{test_size}"
-train_val_test_str = f"{train_size}_{val_size}_{test_size}"
-# print(f"dataset is split into {train_size} training files and {test_size} testing batches ({train_test_str} used in naming files, while {one_batch} is the index of used batch if testing on 1 batch)")
+train_val_test_str = f"{train_size}_{val_size}_{test_size}" if val_size else f"{train_size}_{test_size}"
 print(f"dataset is split into {train_size} training files, and {val_size} validation and {test_size} testing batches respectively ({train_val_test_str} used in naming files)")
 
 batch_suffix = ""
 if one_batch:
     batch_suffix = f"Batch #{one_batch}"
-    print(f"This one batch is of index {one_batch})")
+    print(f"This one batch is of index {one_batch}")
     if train_size + val_size == 100:
         print(batch_suffix, "was already used in training")
 
-params = f"{opt} optimizer {mod.upper()} lr = {lr} ({train_size} Training/{val_size} Validation/{test_size if not one_batch else 1} Testing) ({batch_suffix})"
+params = f"{opt} optimizer {mod.upper()} lr = {lr}\n({train_size} Training/{val_size} Validation/{test_size} Testing){" (" + batch_suffix + ")" if batch_suffix else ''}"
 print(params)
 
 og_pt_dir = "./pt_dir/"
@@ -69,13 +73,7 @@ print(og_pt_dir, "is the location of the original pt files before implementing t
 print(f'"{pt_dir}", "{model_dir}", and "{graph_dir}" are the 3 locations for pt files, nn model weights and graphs respectively')
 
 # -----------------------------------------------------------------------------
-
-# Explicitly tell PyTorch to utilize your 8 CPU cores for matrix math
-# Check for GPU availability to drastically speed up training
-# ! cuda is available only on nvidia gpu
-print(f"PyTorch using {torch.get_num_threads()} threads on {device}")
-
-# -----------------------------------------------------------------------------
+cell3 = time.time()
 
 class FastOFDMDataset(Dataset):
     def __init__(self, pt_folder_path, part):
@@ -97,6 +95,7 @@ class FastOFDMDataset(Dataset):
                 data_pkg['Y_min'], data_pkg['Y_max'])
 
 # -----------------------------------------------------------------------------
+cell9 = time.time()
 
 # 1. Load the Saved Models
 Test_Mod_Re = NNICFMapper().to(device)
@@ -208,6 +207,7 @@ else:
     print(f'Testing complete! Aggregated {test_size * samples_per_L} OFDM symbols.')
 
 # -----------------------------------------------------------------------------
+cell10 = time.time()
 
 # 5. Calculate PAPR and CM for CCDF
 orig_papr, clip_papr, pred_papr = [], [], []
@@ -274,7 +274,13 @@ cm_vlines = [
 # cm_image_path = os.path.join(graph_dir, f"{opt}_{mod}_cm_{train_val_test_str}_{lr_str}.png")
 plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
 
+# -----------------------------------------------------------------------------
 end = time.time()
 # ~98s at test_size = 20
 # ~6s at one_batch != None
 print(f"\nTotal execution time: {end - start:.2f} seconds")
+print(f"Custom Activation Function (Cell 2) time: {cell3 - start:.2f} seconds")
+print(f"Highly Optimized Dataset Class (Cell 3) time: {cell9 - cell3:.2f} seconds")
+print(f"Testing (Cell 9) time: {cell10 - cell9:.2f} seconds")
+print(f"Plotting (Cell 10) time: {end - cell10:.2f} seconds")
+
