@@ -32,20 +32,28 @@ opt = "Adam"
 print(f"Using {opt} optimizer")
 
 # Data splitting
-train_size = 80
-test_size = (100 - train_size) or 1
-train_test_str = f"{train_size}_{test_size}"
-if train_size < 100:
+train_size = 70
+val_size = 10
+# test_size = 100 - train_size
+test_size = 100 - train_size - val_size
+if test_size:
     one_batch = None
-elif train_size == 100:
+else:
+    test_size = 1
     one_batch = "00"
-print(f"dataset is split into {train_size} training files and {test_size} batches ({train_test_str} used in naming files, while {one_batch} is the index of used batch if testing on 1 batch)")
+# train_test_str = f"{train_size}_{test_size}"
+train_val_test_str = f"{train_size}_{val_size}_{test_size}"
+# print(f"dataset is split into {train_size} training files and {test_size} testing batches ({train_test_str} used in naming files, while {one_batch} is the index of used batch if testing on 1 batch)")
+print(f"dataset is split into {train_size} training files, and {val_size} validation and {test_size} testing batches respectively ({train_val_test_str} used in naming files)")
 
-if train_size == 100:
-    print("This 1 batch is of index 00, and was already used in training")
+batch_suffix = ""
+if one_batch:
+    batch_suffix = f"Batch #{one_batch}"
+    print(f"This one batch is of index {one_batch})")
+    if train_size + val_size == 100:
+        print(batch_suffix, "was already used in training")
 
-batch_suffix = f"(Batch #{one_batch})" if one_batch else ""
-params = f"{opt} optimizer {mod.upper()} lr = {lr} ({train_size} Training/{test_size if not one_batch else 1} Testing) {batch_suffix}"
+params = f"{opt} optimizer {mod.upper()} lr = {lr} ({train_size} Training/{val_size} Validation/{test_size if not one_batch else 1} Testing) ({batch_suffix})"
 print(params)
 
 og_pt_dir = "./pt_dir/"
@@ -79,7 +87,7 @@ class FastOFDMDataset(Dataset):
 
     def __getitem__(self, idx):
         # Instantly loads the pre-normalized tensors directly into memory!
-        file_path = os.path.join(self.folder_path, f"{mod}_tx_rx_32_part_{idx:02d}_{self.part}.pt")
+        file_path = os.path.join(self.folder_path, f"{mod}_tx_rx_part_{idx:02d}_{self.part}.pt")
         # Load the dictionary
         data_pkg = torch.load(file_path, weights_only=False)
 
@@ -94,18 +102,20 @@ class FastOFDMDataset(Dataset):
 Test_Mod_Re = NNICFMapper().to(device)
 Test_Mod_Im = NNICFMapper().to(device)
 
-Test_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_re_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
-Test_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_im_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
+Test_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+Test_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
 
 Test_Mod_Re.eval()
 Test_Mod_Im.eval()
 
 # -----------------------------------------------------------------------------
 
+dataset_real = FastOFDMDataset(pt_dir, part='real')
+dataset_imag = FastOFDMDataset(pt_dir, part='imag')
 if one_batch:
     # 2. Grab one batch of data to test (Load the dictionary packages)
-    pkg_real = torch.load(os.path.join(pt_dir, f"{mod}_tx_rx_32_part_{one_batch}_real.pt"), weights_only=False)
-    pkg_imag = torch.load(os.path.join(pt_dir, f"{mod}_tx_rx_32_part_{one_batch}_imag.pt"), weights_only=False)
+    pkg_real = torch.load(os.path.join(pt_dir, f"{mod}_tx_rx_part_{one_batch}_real.pt"), weights_only=False)
+    pkg_imag = torch.load(os.path.join(pt_dir, f"{mod}_tx_rx_part_{one_batch}_imag.pt"), weights_only=False)
     # Extract tensors
     test_X_real, test_Y_real = pkg_real['X_norm'], pkg_real['Y_norm']
     test_X_imag, test_Y_imag = pkg_imag['X_norm'], pkg_imag['Y_norm']
@@ -127,10 +137,13 @@ if one_batch:
     original_complex = test_X_real.numpy() + 1j * test_X_imag.numpy()
     clipped_complex = test_Y_real.numpy() + 1j * test_Y_imag.numpy()
     predicted_complex = pred_denorm_real + 1j * pred_denorm_imag
-elif train_size < 100:
-    # 2. Setup the Test Data (Files train_size-99)
-    test_dataset_real = Subset(FastOFDMDataset(pt_dir, part='real'), range(train_size, 100))
-    test_dataset_imag = Subset(FastOFDMDataset(pt_dir, part='imag'), range(train_size, 100))
+else:
+#     # 2. Setup the Test Data (Files train_size->99)
+#     test_dataset_real = Subset(FastOFDMDataset(pt_dir, part='real'), range(train_size, 100))
+#     test_dataset_imag = Subset(FastOFDMDataset(pt_dir, part='imag'), range(train_size, 100))
+    # 2. Setup the Test Data (Files (train_size+val_size)->99)
+    test_dataset_real = Subset(dataset_real, range(train_size + val_size, 100))
+    test_dataset_imag = Subset(dataset_imag, range(train_size + val_size, 100))
 
     # We set shuffle=False to ensure real and imag batches stay perfectly aligned
     test_loader_real = DataLoader(test_dataset_real, batch_size=None, shuffle=False)
@@ -222,7 +235,7 @@ cm_list = [orig_cm, clip_cm, pred_cm]
 # plot_ccdf_compare(papr_list, f'Original vs ICF vs {title}', labels)
 plot_ccdf_compare(cm_list, f'Original vs ICF vs {title}', labels, metric="CM")
 
-# fixme: both percentile and max are not the most effecient solution
+# fixme: both percentile and max are not the most efficient solutions
 
 # todo: find a way to embed the floor part into the plotting function
 # 1. Define the target y-levels (probabilities)
@@ -254,11 +267,11 @@ cm_vlines = [
 # ]
 
 # # 4. Plot!
-# # papr_image_path = os.path.join(graph_dir, f"{opt}_{mod}_papr_{train_test_str}_{lr_str}.png")
+# # papr_image_path = os.path.join(graph_dir, f"{opt}_{mod}_papr_{train_val_test_str}_{lr_str}.png")
 # # plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines, save=papr_image_path)
 # plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines)
 
-# cm_image_path = os.path.join(graph_dir, f"{opt}_{mod}_cm_{train_test_str}_{lr_str}.png")
+# cm_image_path = os.path.join(graph_dir, f"{opt}_{mod}_cm_{train_val_test_str}_{lr_str}.png")
 plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
 
 end = time.time()

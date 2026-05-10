@@ -2,7 +2,7 @@ import numpy as np
 from ofdm.modem import qam16_mod, qpsk_mod
 from ofdm.candf import oversample_time, clip_and_filter_time
 from ofdm.metrics import calculate_papr, calculate_cm
-from ofdm.plots import plot_ccdf_compare, plot_ccdf
+from ofdm.plots import plot_ccdf_compare, plot_ccdf, plot_signals, plot_signals2
 import torch
 from nnicf import NNICFMapper, normalize, denormalize
 import os
@@ -34,20 +34,24 @@ lr = 0.001
 lr_str = "dot" + str(lr).split(".")[1]
 
 # Data splitting (used only in saving and loading files, not in the actual C&F process)
-train_size = 80
-test_size = (100 - train_size) or 1
-train_test_str = f"{train_size}_{test_size}"
-# if train_size < 100:
-#     one_batch = None
-# elif train_size == 100:
-#     one_batch = "00"
+train_size = 70
+val_size = 10
+# test_size = 100 - train_size
+test_size = 100 - train_size - val_size
+if test_size:
+    one_batch = None
+else:
+    test_size = 1
+    one_batch = "00"
+# train_test_str = f"{train_size}_{test_size}"
+train_val_test_str = f"{train_size}_{val_size}_{test_size}"
 
 # Optimizer
 opt = "Adam"
 # opt = "LBFGS"
 
-model_dir = "./trained_models/"
-# model_dir = "./new architecture/"
+# model_dir = "./trained_models/"
+model_dir = "./new architecture/"
 
 # * Load nnicf model
 
@@ -59,8 +63,8 @@ NN_Mod_Re = NNICFMapper().to(device)
 NN_Mod_Im = NNICFMapper().to(device)
 
 # Inject the trained weights
-NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_re_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
-NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_im_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
+NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
 # NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{mod}_mod_re_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
 # NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{mod}_mod_im_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
 
@@ -73,10 +77,12 @@ unclipped_papr, unclipped_cm = [], []
 iterations_papr = [[] for _ in range(iterations)]
 iterations_cm = [[] for _ in range(iterations)]
 
-# todo: plot time domain signal
+# todo: implement scf
 
 samples_per_L_minus_iterations_loop = 0
 iterations_loop = 0
+
+x_time, x_clip, x_filt = [], [], []
 
 tx_time, rx_time = [[], []], [[], []]
 for _ in range(samples_per_L):
@@ -103,23 +109,30 @@ for _ in range(samples_per_L):
     t2 = time.time()
     samples_per_L_minus_iterations_loop += t2 - t1
     # Process C&F
+    x_filt = x_time.copy()
     for i in range(iterations):
-        x_time, _ = clip_and_filter_time(x_time, cr, N)
+        x_filt, x_clip = clip_and_filter_time(x_filt, cr, N)
 
         # Store PAPR of the current iterative result
-        iterations_papr[i].append(calculate_papr(x_time))
-        iterations_cm[i].append(calculate_cm(x_time))
+        iterations_papr[i].append(calculate_papr(x_filt))
+        iterations_cm[i].append(calculate_cm(x_filt))
     t3 = time.time()
     iterations_loop += t3 - t2
 
     # store the final iteration's real and imag parts separately
-    rx_time[0].append(np.real(x_time).astype(np.float32, copy=False))
-    rx_time[1].append(np.imag(x_time).astype(np.float32, copy=False))
+    rx_time[0].append(np.real(x_filt).astype(np.float32, copy=False))
+    rx_time[1].append(np.imag(x_filt).astype(np.float32, copy=False))
     t4 = time.time()
     samples_per_L_minus_iterations_loop += t4 - t1
 
 tx_time = np.array(tx_time, dtype=np.float32)
 rx_time = np.array(rx_time, dtype=np.float32)
+
+signals = {
+    'original': x_time,
+    'clipped': x_clip,
+    'filtered': x_filt
+}
 
 middle = time.time()
 
@@ -148,6 +161,8 @@ pred_denorm_imag = denormalize(predicted_imag, tx_minmax_imag)
 # each has shape of samples_per_L, (N * L)
 predicted_complex = pred_denorm_real + 1j * pred_denorm_imag
 
+signals["predicted"] = predicted_complex[-1]
+
 # 5. Calculate PAPR (Peak-to-Average Power Ratio) for CCDF
 pred_papr, pred_cm = [], []
 for i in range(samples_per_L):
@@ -158,14 +173,14 @@ pred_cm = np.array(pred_cm)
 
 # 6. Plot the CCDF
 title = f"NNICF Predicted OFDM\n{opt} {mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)\nlr = {lr} ({train_size} Training/{test_size} Testing)"
-labels = ['Original', f'ICF ({iterations} iterations)', 'NNICF Predicted']
+labels = ['Original', f'ICF ({iterations} iteration{"s" if iterations > 1 else ""})', 'NNICF Predicted']
 papr_list = [unclipped_papr, iterations_papr[-1], pred_papr]
 cm_list = [unclipped_cm, iterations_cm[-1], pred_cm]
 
 # plot_ccdf_compare(papr_list, f"Original vs ICF vs {title}", labels)
 plot_ccdf_compare(cm_list, f"Original vs ICF vs {title}", labels, metric="CM")
 
-# fixme: both percentile and max are not the most effecient solution
+# fixme: both percentile and max are not the most efficient solutions
 
 # todo: find a way to embed the floor part into the plotting function
 # 1. Define the target y-levels (probabilities)
@@ -210,3 +225,7 @@ print(f"Total execution time: {end - start:.2f} seconds")
 print()
 print("time taken in the inner iterations loop:", iterations_loop)
 print("time taken in outer samples_per_L loop:", samples_per_L_minus_iterations_loop)
+
+labels = ['Original', f'Clipped ({iterations} iteration{"s" if iterations > 1 else ""})', f'ICF ({iterations} iteration{"s" if iterations > 1 else ""})', 'NNICF Predicted']
+plot_signals(signals, labels)
+plot_signals2(signals, labels)

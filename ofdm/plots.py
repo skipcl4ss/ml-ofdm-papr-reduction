@@ -51,7 +51,7 @@ def plot_ccdf(vals, title=None, label=None, metric='PAPR', vlines=None, save=Fal
         #     y_theory = ccdf_theoretical(N, x_theory)
         #     plt.semilogy(x_theory, y_theory, 'k--', linewidth=1.5, label='Theoretical (L=1)')
 
-    # fixme: both percentile and max are not the most effecient solution
+    # fixme: both percentile and max are not the most efficient solutions
     # ? is percentile() 100% accurate
     p = (1.0 - bottom) * 100.0
     percentile = np.percentile(vals, p, method="higher")
@@ -63,10 +63,10 @@ def plot_ccdf(vals, title=None, label=None, metric='PAPR', vlines=None, save=Fal
         plt.axvline(x=left, color='gray', alpha=0.4)
         plt.axvline(x=right, color='gray', alpha=0.4)
 
+    ccdf_format(title, metric, vlines)
+
     if label:
         plt.legend(loc='lower left')
-
-    ccdf_format(title, metric, vlines)
     if save:
         plt.savefig(save, dpi=150)
     plt.show()
@@ -96,7 +96,7 @@ def plot_ccdf_compare(val_list, title=None, label=None, metric='PAPR', save=Fals
                          # marker="D",
                          label=label[i])
         elif any(k in name for k in ("original", "unclipped")):
-            plt.semilogy(sorted_vals, y_axis, color="k", linewidth=2,
+            plt.semilogy(sorted_vals, y_axis, color="b", linewidth=2,
                          # marker="s",
                          label=label[i])
         elif any(k in name for k in ("filtered", "icf")):
@@ -119,8 +119,8 @@ def plot_ccdf_compare(val_list, title=None, label=None, metric='PAPR', save=Fals
     #         plt.semilogy(x_theory, y_theory, 'k--', linewidth=1.5, label='Theoretical (L=1)')
 
     plt.xlim(left, right)
-    plt.legend(loc='lower left', ncol=2 if len(val_list) > 3 else 1)
     ccdf_format(title, metric)
+    plt.legend(loc='lower left', ncol=2 if len(val_list) > 3 else 1)
     if save:
         plt.savefig(save, dpi=150)
     plt.show()
@@ -166,7 +166,7 @@ def plot_ber(EbNo_range, val_list, title=None, label=None, M=4, save=False):
         if any(k in name for k in ("nn", "neural", "predicted", "proposed")):
             plt.semilogy(EbNo_range, vals, color="g", linewidth=2, marker="D", label=label[i])
         elif any(k in name for k in ("original", "unclipped")):
-            plt.semilogy(EbNo_range, vals, color="k", linewidth=2, marker="s", label=label[i])
+            plt.semilogy(EbNo_range, vals, color="b", linewidth=2, marker="s", label=label[i])
         elif any(k in name for k in ("filtered", "icf")):
             plt.semilogy(EbNo_range, vals, color="r", linewidth=2, marker="o", label=label[i])
         # elif "clipped" in label[i].lower():
@@ -178,8 +178,164 @@ def plot_ber(EbNo_range, val_list, title=None, label=None, M=4, save=False):
     # y_theory = np.array([ber_theoretical(EbNo_dB, M) for EbNo_dB in EbNo_range])
     # plt.semilogy(EbNo_range, y_theory, '--', color='black', linewidth=2, label='Theoretical')
 
-    plt.legend(loc='lower left', ncol=2 if len(val_list) > 3 else 1)
     ber_format(title, M)
+    plt.legend(loc='lower left', ncol=2 if len(val_list) > 3 else 1)
     if save:
         plt.savefig(save, dpi=150)
+    plt.show()
+
+def plot_constellation(symbols, mod, limit, title=None, label=None, color=None):
+    plt.figure(figsize=(6, 6))
+    plt.scatter(symbols.real, symbols.imag, c=color, marker='o', s=20, label=label)
+    plt.title(title)
+    plt.xlabel('In-Phase (I)')
+    plt.ylabel('Quadrature (Q)')
+    plt.grid(True)
+    plt.axhline(0, color='black', linewidth=1)
+    plt.axvline(0, color='black', linewidth=1)
+    plt.gca().set_aspect('equal', adjustable='box')
+    plt.xlim(-limit, limit)
+    plt.ylim(-limit, limit)
+
+    if mod == "16qam":
+        step = 1 / np.sqrt(10)
+        l = r"{\sqrt{10}}$"
+    elif mod == "qpsk":
+        step = 1 / np.sqrt(2)
+        l = r"{\sqrt{2}}$"
+    labels = [r"$-\frac{4}" + l, r"$-\frac{2}" + l, 0, r"$\frac{2}" + l, r"$\frac{4}" + l]
+    ticks = np.arange(-4 * step, 5 * step, 2 * step)
+    plt.xticks(ticks, labels)
+    plt.yticks(ticks, labels)
+
+    plt.legend(loc='lower left', ncol=2)
+    plt.show()
+
+def plot_signals(signals, labels, iterations=3):
+    """
+    Plot example signals in time domain.
+    """
+    top = np.max(np.abs(signals['original']))
+    right = len(next(iter(signals.values())))
+    # todo: add the calculated clipped value
+    clip_threshold = np.max(np.abs(signals['clipped']))
+    l = len(signals)
+    x_axis = np.arange(right)
+
+    fig, axs = plt.subplots(l, 1, figsize=(10, 8), sharex=True)
+
+    for i, (k, v) in enumerate(signals.items()):
+        axs[i].stem(x_axis, np.abs(v), basefmt=" ", markerfmt=".", linefmt="C0-")
+        axs[i].set_title(labels[i])
+        axs[i].grid(True)
+        axs[i].set_ylabel('Amplitude')
+        axs[i].set_xlim(0, right)
+        axs[i].set_ylim(0, top * 1.1)
+        axs[i].axhline(clip_threshold, color='gray', linestyle='--', label='Clipping Threshold')
+        axs[i].legend()
+        if i + 1 == l:
+            plt.xlabel('Time')
+
+    plt.show()
+
+    s_orig = np.abs(signals['original'])
+    s_clip = np.abs(signals['clipped'])
+    s_filt = np.abs(signals['filtered'])
+
+    x_axis = np.arange(len(s_orig))
+
+    fig, axs = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+
+    axs[0].stem(x_axis, s_orig, basefmt=" ", markerfmt=".", linefmt="C0-")
+    axs[0].set_title(f'Normal OFDM Signal)')
+    axs[0].grid(True)
+    axs[0].set_ylabel('Amplitude')
+    axs[0].set_xlim(0, len(s_orig))
+    axs[0].set_ylim(0, np.max(s_orig) * 1.1)
+    axs[0].axhline(np.max(s_clip), color='gray', linestyle='--', label='Clipping Threshold')
+    axs[0].legend()
+
+    axs[1].stem(x_axis, s_clip, basefmt=" ", markerfmt=".", linefmt="C0-")
+    axs[1].set_title(f'Clipped OFDM Signal ({iterations} iteration{"s" if iterations > 1 else ""})')
+    axs[1].grid(True)
+    axs[1].set_ylabel('Amplitude')
+    axs[1].set_xlim(0, len(s_clip))
+    axs[1].set_ylim(0, np.max(s_orig) * 1.1)
+    axs[1].axhline(np.max(s_clip), color='gray', linestyle='--', label='Clipping Threshold')
+    axs[1].legend()
+
+    axs[2].plot(x_axis, s_filt, color='C0')
+    axs[2].fill_between(x_axis, s_filt, color='C0', alpha=0.3)
+    axs[2].set_title('Clipped and Filtered OFDM Signal')
+    axs[1].grid(True)
+    axs[2].set_xlabel('Time')
+    axs[2].set_ylabel('Amplitude')
+    axs[2].set_xlim(0, len(s_filt))
+    axs[2].set_ylim(0, np.max(s_orig) * 1.1)
+    axs[2].axhline(np.max(s_clip), color='gray', linestyle='--', label='Clipping Threshold')
+    axs[2].legend()
+
+    # plt.tight_layout()
+    plt.show()
+
+def plot_signals2(signals, labels, iterations=3):
+    top = np.max(np.abs(signals['original']))
+    right = len(next(iter(signals.values())))
+    # todo: add the calculated clipped value
+    clip_threshold = np.max(np.abs(signals['clipped']))
+    l = len(signals)
+    x_axis = np.arange(right)
+
+    plt.figure(figsize=(10, 8))
+
+    for i, (k, v) in enumerate(signals.items()):
+        plt.subplot(l, 1, i + 1)
+        plt.plot(x_axis, np.abs(v), label=labels[i])
+        plt.grid(True)
+        plt.ylabel('Amplitude')
+        plt.xlim(0, right)
+        plt.ylim(0, top * 1.1)
+        plt.axhline(clip_threshold, color='gray', linestyle='--', label='Clipping Threshold')
+        plt.legend()
+        if i + 1 == l:
+            plt.xlabel('Time')
+
+    plt.show()
+
+    s_orig = np.abs(signals['original'])
+    s_clip = np.abs(signals['clipped'])
+    s_filt = np.abs(signals['filtered'])
+
+    x_axis = np.arange(len(s_orig))
+
+    plt.subplot(3, 1, 1)
+    plt.title('Time Domain OFDM Signal (Original vs Clipped vs Filtered)')
+    plt.plot(x_axis, s_orig, 'b', label='Original OFDM')
+    plt.grid(True)
+    plt.ylabel('Amplitude')
+    plt.xlim(0, len(s_orig))
+    plt.ylim(0, np.max(s_orig) * 1.1)
+    plt.axhline(np.max(s_clip), color='gray', linestyle='--', label='Clipping Threshold')
+    plt.legend()
+
+    plt.subplot(3, 1, 2)
+    plt.plot(x_axis, s_clip, 'g-', linewidth=1, label=f'Clipped ({iterations} iteration{"s" if iterations > 1 else ""})')
+    plt.grid(True)
+    plt.ylabel('Amplitude')
+    plt.xlim(0, len(s_clip))
+    plt.ylim(0, np.max(s_orig) * 1.1)
+    plt.axhline(np.max(s_clip), color='gray', linestyle='--', label='Clipping Threshold')
+    plt.legend()
+
+    plt.subplot(3, 1, 3)
+    plt.plot(x_axis, s_filt, 'r--', linewidth=1, label=f'Filtered ({iterations} iteration{"s" if iterations > 1 else ""})')
+    plt.grid(True)
+    plt.xlabel('Time')
+    plt.ylabel('Amplitude')
+    plt.xlim(0, len(s_filt))
+    plt.ylim(0, np.max(s_orig) * 1.1)
+    plt.axhline(np.max(s_clip), color='gray', linestyle='--', label='Clipping Threshold')
+    plt.legend()
+
+    # plt.tight_layout()
     plt.show()

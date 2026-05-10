@@ -2,7 +2,7 @@ import numpy as np
 from ofdm.modem import qam16_mod, qpsk_mod, qam16_demod, qpsk_demod
 from ofdm.candf import oversample_time, clip_and_filter_time, emulate_awgn_channel
 from ofdm.metrics import ber_theoretical
-from ofdm.plots import plot_ber
+from ofdm.plots import plot_ber, plot_constellation
 import torch
 from nnicf import NNICFMapper, normalize, denormalize
 import os
@@ -33,20 +33,24 @@ lr = 0.001
 lr_str = "dot" + str(lr).split(".")[1]
 
 # Data splitting (used only in saving and loading files, not in the actual C&F process)
-train_size = 80
-test_size = (100 - train_size) or 1
-train_test_str = f"{train_size}_{test_size}"
-# if train_size < 100:
-#     one_batch = None
-# elif train_size == 100:
-#     one_batch = "00"
+train_size = 70
+val_size = 10
+# test_size = 100 - train_size
+test_size = 100 - train_size - val_size
+if test_size:
+    one_batch = None
+else:
+    test_size = 1
+    one_batch = "00"
+# train_test_str = f"{train_size}_{test_size}"
+train_val_test_str = f"{train_size}_{val_size}_{test_size}"
 
 # Optimizer
 opt = "Adam"
 # opt = "LBFGS"
 
-model_dir = "./trained_models/"
-# model_dir = "./new architecture/"
+# model_dir = "./trained_models/"
+model_dir = "./new architecture/"
 
 # * Load nnicf model
 
@@ -58,8 +62,8 @@ NN_Mod_Re = NNICFMapper().to(device)
 NN_Mod_Im = NNICFMapper().to(device)
 
 # Inject the trained weights
-NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_re_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
-NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_im_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
+NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
 # NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{mod}_mod_re_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
 # NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{mod}_mod_im_weights_{train_test_str}_{lr_str}.pth"), weights_only=True))
 
@@ -93,6 +97,8 @@ bits_per_symbol = int(np.log2(M))
 num_symb = 100
 for EbNo_dB in EbNo_range:
     t1 = time.time()
+
+    plotted = False
     # ! the ratio at the en is to represent the loss done by the CP
     SNR_dB = EbNo_dB + 10 * np.log10(bits_per_symbol * (N / (N + CP)))
     # Counters for bit errors
@@ -117,6 +123,10 @@ for EbNo_dB in EbNo_range:
             # Generate QPSK Symbols
             tx_symbols = qpsk_mod(tx_bits, bits=True)
 
+        if (EbNo_dB == EbNo_range[0] or EbNo_dB == EbNo_range[-1]) and not plotted:
+            limit = np.max(np.abs(tx_symbols)) * 1.1
+            plot_constellation(tx_symbols, mod, limit, title=f'Transmitted Constellation', label='Tx Symbols', color='black')
+
         # No clipping case
         tx_ofdm_no_clip = np.fft.ifft(tx_symbols)
 
@@ -135,6 +145,8 @@ for EbNo_dB in EbNo_range:
 
         t4 = time.time()
         num_symb_minus_iterations_loop_minus_nn += t4 - t3
+
+        rx_symbols_filtered = None
         for i in range(1, iterations + 1):
             # Get clipped signal (no filtering)
             tx_time_oversampled = oversample_time(tx_symbols, N, L)
@@ -168,9 +180,18 @@ for EbNo_dB in EbNo_range:
 
             bit_error_filtered[i] += np.sum(tx_bits != rx_bits_filtered)
 
+            # if EbNo_dB == EbNo_range[0] and not plotted:
+            #     plot_constellation(tx_symbols, mod, limit, title=f'Transmitted Constellation', label='Tx Symbols', color='black')
+            #     plot_constellation(rx_symbols_no_clip, mod, limit, title=f'Received Constellation (No Clip)', label='Rx Symbols (No Clip)', color='red')
+            #     plot_constellation(rx_symbols_clipped, mod, limit, title=f'Received Constellation (Clipped)', label='Rx Symbols (Clipped)', color='green')
+            #     plot_constellation(rx_symbols_filtered, mod, limit, title=f'Received Constellation (Filtered)', label='Rx Symbols (Filtered)', color='blue')
+
             # ? why not rx_symbols_filtered
             tx_symbols = np.fft.fft(filtered_downsampled)
             # tx_symbols = rx_symbols_filtered
+
+        if (EbNo_dB == EbNo_range[0] or EbNo_dB == EbNo_range[-1]) and not plotted:
+            plot_constellation(rx_symbols_filtered, mod, limit, title=f'Received Constellation (Filtered)', label='Rx Symbols (Filtered)', color='blue')
         t5 = time.time()
         iterations_loop += t5 - t4
 
@@ -205,6 +226,11 @@ for EbNo_dB in EbNo_range:
 
         # predicted_downsampled = predicted_complex[::L]
         predicted_symbols = emulate_awgn_channel(predicted_complex, CP, SNR_dB, L)
+
+        if (EbNo_dB == EbNo_range[0] or EbNo_dB == EbNo_range[-1]) and not plotted:
+            plot_constellation(predicted_symbols, mod, limit, title=f'Predicted Constellation',
+                               label='Rx Symbols (Predicted)', color='magenta')
+        plotted = True
 
         if mod == "16qam":
             predicted_bits = qam16_demod(predicted_symbols, bits=True)
