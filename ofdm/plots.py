@@ -236,47 +236,48 @@ def plot_signals(signals, labels, iterations=3):
         if i + 1 == l:
             plt.xlabel('Time')
 
-    plt.show()
-
-    s_orig = np.abs(signals['original'])
-    s_clip = np.abs(signals['clipped'])
-    s_filt = np.abs(signals['filtered'])
-
-    x_axis = np.arange(len(s_orig))
-
-    fig, axs = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
-
-    axs[0].stem(x_axis, s_orig, basefmt=" ", markerfmt=".", linefmt="C0-")
-    axs[0].set_title(f'Normal OFDM Signal)')
-    axs[0].grid(True)
-    axs[0].set_ylabel('Amplitude')
-    axs[0].set_xlim(0, len(s_orig))
-    axs[0].set_ylim(0, np.max(s_orig) * 1.1)
-    axs[0].axhline(np.max(s_clip), color='gray', linestyle='--', label='Clipping Threshold')
-    axs[0].legend()
-
-    axs[1].stem(x_axis, s_clip, basefmt=" ", markerfmt=".", linefmt="C0-")
-    axs[1].set_title(f'Clipped OFDM Signal ({iterations} iteration{"s" if iterations > 1 else ""})')
-    axs[1].grid(True)
-    axs[1].set_ylabel('Amplitude')
-    axs[1].set_xlim(0, len(s_clip))
-    axs[1].set_ylim(0, np.max(s_orig) * 1.1)
-    axs[1].axhline(np.max(s_clip), color='gray', linestyle='--', label='Clipping Threshold')
-    axs[1].legend()
-
-    axs[2].plot(x_axis, s_filt, color='C0')
-    axs[2].fill_between(x_axis, s_filt, color='C0', alpha=0.3)
-    axs[2].set_title('Clipped and Filtered OFDM Signal')
-    axs[1].grid(True)
-    axs[2].set_xlabel('Time')
-    axs[2].set_ylabel('Amplitude')
-    axs[2].set_xlim(0, len(s_filt))
-    axs[2].set_ylim(0, np.max(s_orig) * 1.1)
-    axs[2].axhline(np.max(s_clip), color='gray', linestyle='--', label='Clipping Threshold')
-    axs[2].legend()
-
     # plt.tight_layout()
     plt.show()
+
+    # s_orig = np.abs(signals['original'])
+    # s_clip = np.abs(signals['clipped'])
+    # s_filt = np.abs(signals['filtered'])
+    #
+    # x_axis = np.arange(len(s_orig))
+    #
+    # fig, axs = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+    #
+    # axs[0].stem(x_axis, s_orig, basefmt=" ", markerfmt=".", linefmt="C0-")
+    # axs[0].set_title(f'Normal OFDM Signal)')
+    # axs[0].grid(True)
+    # axs[0].set_ylabel('Amplitude')
+    # axs[0].set_xlim(0, len(s_orig))
+    # axs[0].set_ylim(0, np.max(s_orig) * 1.1)
+    # axs[0].axhline(np.max(s_clip), color='gray', linestyle='--', label='Clipping Threshold')
+    # axs[0].legend()
+    #
+    # axs[1].stem(x_axis, s_clip, basefmt=" ", markerfmt=".", linefmt="C0-")
+    # axs[1].set_title(f'Clipped OFDM Signal ({iterations} iteration{"s" if iterations > 1 else ""})')
+    # axs[1].grid(True)
+    # axs[1].set_ylabel('Amplitude')
+    # axs[1].set_xlim(0, len(s_clip))
+    # axs[1].set_ylim(0, np.max(s_orig) * 1.1)
+    # axs[1].axhline(np.max(s_clip), color='gray', linestyle='--', label='Clipping Threshold')
+    # axs[1].legend()
+    #
+    # axs[2].plot(x_axis, s_filt, color='C0')
+    # axs[2].fill_between(x_axis, s_filt, color='C0', alpha=0.3)
+    # axs[2].set_title('Clipped and Filtered OFDM Signal')
+    # axs[1].grid(True)
+    # axs[2].set_xlabel('Time')
+    # axs[2].set_ylabel('Amplitude')
+    # axs[2].set_xlim(0, len(s_filt))
+    # axs[2].set_ylim(0, np.max(s_orig) * 1.1)
+    # axs[2].axhline(np.max(s_clip), color='gray', linestyle='--', label='Clipping Threshold')
+    # axs[2].legend()
+    #
+    # # plt.tight_layout()
+    # plt.show()
 
 def plot_signals2(signals, labels, iterations=3):
     top = np.max(np.abs(signals['original']))
@@ -300,42 +301,43 @@ def plot_signals2(signals, labels, iterations=3):
         if i + 1 == l:
             plt.xlabel('Time')
 
-    plt.show()
-
-    s_orig = np.abs(signals['original'])
-    s_clip = np.abs(signals['clipped'])
-    s_filt = np.abs(signals['filtered'])
-
-    x_axis = np.arange(len(s_orig))
-
-    plt.subplot(3, 1, 1)
-    plt.title('Time Domain OFDM Signal (Original vs Clipped vs Filtered)')
-    plt.plot(x_axis, s_orig, 'b', label='Original OFDM')
-    plt.grid(True)
-    plt.ylabel('Amplitude')
-    plt.xlim(0, len(s_orig))
-    plt.ylim(0, np.max(s_orig) * 1.1)
-    plt.axhline(np.max(s_clip), color='gray', linestyle='--', label='Clipping Threshold')
-    plt.legend()
-
-    plt.subplot(3, 1, 2)
-    plt.plot(x_axis, s_clip, 'g-', linewidth=1, label=f'Clipped ({iterations} iteration{"s" if iterations > 1 else ""})')
-    plt.grid(True)
-    plt.ylabel('Amplitude')
-    plt.xlim(0, len(s_clip))
-    plt.ylim(0, np.max(s_orig) * 1.1)
-    plt.axhline(np.max(s_clip), color='gray', linestyle='--', label='Clipping Threshold')
-    plt.legend()
-
-    plt.subplot(3, 1, 3)
-    plt.plot(x_axis, s_filt, 'r--', linewidth=1, label=f'Filtered ({iterations} iteration{"s" if iterations > 1 else ""})')
-    plt.grid(True)
-    plt.xlabel('Time')
-    plt.ylabel('Amplitude')
-    plt.xlim(0, len(s_filt))
-    plt.ylim(0, np.max(s_orig) * 1.1)
-    plt.axhline(np.max(s_clip), color='gray', linestyle='--', label='Clipping Threshold')
-    plt.legend()
-
     # plt.tight_layout()
     plt.show()
+
+    # s_orig = np.abs(signals['original'])
+    # s_clip = np.abs(signals['clipped'])
+    # s_filt = np.abs(signals['filtered'])
+    #
+    # x_axis = np.arange(len(s_orig))
+    #
+    # plt.subplot(3, 1, 1)
+    # plt.title('Time Domain OFDM Signal (Original vs Clipped vs Filtered)')
+    # plt.plot(x_axis, s_orig, 'b', label='Original OFDM')
+    # plt.grid(True)
+    # plt.ylabel('Amplitude')
+    # plt.xlim(0, len(s_orig))
+    # plt.ylim(0, np.max(s_orig) * 1.1)
+    # plt.axhline(np.max(s_clip), color='gray', linestyle='--', label='Clipping Threshold')
+    # plt.legend()
+    #
+    # plt.subplot(3, 1, 2)
+    # plt.plot(x_axis, s_clip, 'g-', linewidth=1, label=f'Clipped ({iterations} iteration{"s" if iterations > 1 else ""})')
+    # plt.grid(True)
+    # plt.ylabel('Amplitude')
+    # plt.xlim(0, len(s_clip))
+    # plt.ylim(0, np.max(s_orig) * 1.1)
+    # plt.axhline(np.max(s_clip), color='gray', linestyle='--', label='Clipping Threshold')
+    # plt.legend()
+    #
+    # plt.subplot(3, 1, 3)
+    # plt.plot(x_axis, s_filt, 'r--', linewidth=1, label=f'Filtered ({iterations} iteration{"s" if iterations > 1 else ""})')
+    # plt.grid(True)
+    # plt.xlabel('Time')
+    # plt.ylabel('Amplitude')
+    # plt.xlim(0, len(s_filt))
+    # plt.ylim(0, np.max(s_orig) * 1.1)
+    # plt.axhline(np.max(s_clip), color='gray', linestyle='--', label='Clipping Threshold')
+    # plt.legend()
+    #
+    # # plt.tight_layout()
+    # plt.show()

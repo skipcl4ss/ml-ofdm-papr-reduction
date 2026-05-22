@@ -123,7 +123,7 @@ for EbNo_dB in EbNo_range:
 
         if (EbNo_dB == EbNo_range[0] or EbNo_dB == EbNo_range[-1]) and not plotted:
             limit = np.max(np.abs(tx_symbols)) * 1.1
-            plot_constellation(tx_symbols, mod, limit, title=f'Transmitted Constellation', label='Tx Symbols', color='black')
+            plot_constellation(tx_symbols, mod, limit, title=f'Transmitted Constellation at E$_b$/N$_0$ = {EbNo_dB}dB', label='Tx Symbols', color='black')
 
         # No clipping case
         tx_ofdm_no_clip = np.fft.ifft(tx_symbols)
@@ -179,17 +179,17 @@ for EbNo_dB in EbNo_range:
             bit_error_filtered[i] += np.sum(tx_bits != rx_bits_filtered)
 
             # if EbNo_dB == EbNo_range[0] and not plotted:
-            #     plot_constellation(tx_symbols, mod, limit, title=f'Transmitted Constellation', label='Tx Symbols', color='black')
-            #     plot_constellation(rx_symbols_no_clip, mod, limit, title=f'Received Constellation (No Clip)', label='Rx Symbols (No Clip)', color='red')
-            #     plot_constellation(rx_symbols_clipped, mod, limit, title=f'Received Constellation (Clipped)', label='Rx Symbols (Clipped)', color='green')
-            #     plot_constellation(rx_symbols_filtered, mod, limit, title=f'Received Constellation (Filtered)', label='Rx Symbols (Filtered)', color='blue')
+            #     plot_constellation(tx_symbols, mod, limit, title=f'Transmitted Constellation at E$_b$/N$_0$ = {EbNo_dB}dB', label='Tx Symbols', color='black')
+            #     plot_constellation(rx_symbols_no_clip, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (No Clip)', label='Rx Symbols (No Clip)', color='red')
+            #     plot_constellation(rx_symbols_clipped, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Clipped)', label='Rx Symbols (Clipped)', color='green')
+            #     plot_constellation(rx_symbols_filtered, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Filtered)', label='Rx Symbols (Filtered)', color='blue')
 
             # ? why not rx_symbols_filtered
             tx_symbols = np.fft.fft(filtered_downsampled)
             # tx_symbols = rx_symbols_filtered
 
         if (EbNo_dB == EbNo_range[0] or EbNo_dB == EbNo_range[-1]) and not plotted:
-            plot_constellation(rx_symbols_filtered, mod, limit, title=f'Received Constellation (Filtered)', label='Rx Symbols (Filtered)', color='blue')
+            plot_constellation(rx_symbols_filtered, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Filtered)', label='Rx Symbols (Filtered)', color='blue')
         t5 = time.time()
         iterations_loop += t5 - t4
 
@@ -226,8 +226,7 @@ for EbNo_dB in EbNo_range:
         predicted_symbols = emulate_awgn_channel(predicted_complex, CP, SNR_dB, L)
 
         if (EbNo_dB == EbNo_range[0] or EbNo_dB == EbNo_range[-1]) and not plotted:
-            plot_constellation(predicted_symbols, mod, limit, title=f'Predicted Constellation',
-                               label='Rx Symbols (Predicted)', color='magenta')
+            plot_constellation(predicted_symbols, mod, limit, title=f'Predicted Constellation at E$_b$/N$_0$ = {EbNo_dB}dB', label='Rx Symbols (Predicted)', color='magenta')
         plotted = True
 
         if mod == "16qam":
@@ -257,7 +256,7 @@ for EbNo_dB in EbNo_range:
         BER_results[f'clipped_filtered_iteration {i}'].append(ber_filtered)
         # ber_theory_list.append(ber_theory)
 
-    print(f"  Eb/No: {EbNo_dB:.2f} dB | BER (No clip): {ber_no_clip:.6f} | BER (Theory): {ber_theory:.6f}")
+    print(f"Eb/No: {EbNo_dB:.2f} dB | BER (No clip): {ber_no_clip:.6f} | BER (Theory): {ber_theory:.6f}")
     t8 = time.time()
     EbNo_minus_num_symb_loop += t8 - t7
 
