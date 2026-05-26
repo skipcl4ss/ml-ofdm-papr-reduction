@@ -1,12 +1,14 @@
 import numpy as np
 from ofdm.modem import qam16_mod, qpsk_mod, qam16_demod, qpsk_demod
-from ofdm.candf import oversample_time, clip_and_filter_time, emulate_awgn_channel
+from ofdm.candf import oversample_time, clip_and_filter_time, emulate_awgn_channel, scf_time, scf_time2
 from ofdm.metrics import ber_theoretical
 from ofdm.plots import plot_ber, plot_constellation
 import torch
 from nnscf import NNICFMapper, normalize, denormalize
 import os
 import time
+
+# todo: clean up ths and other scf files
 
 start = time.time()
 
@@ -23,7 +25,9 @@ iterations = 3
 
 # modulation scheme
 mod = "16qam"
+M = 16
 # mod = "qpsk"
+# M = 4
 
 # clipping technique
 # tech = "icf"
@@ -76,11 +80,11 @@ NN_Mod_Im.eval()
 ber_theory_list = []
 BER_results = {
     'no_clipping': [],
+    'clipped_scf': [],
+    'scf': [],
     'predicted': []
+
 }
-for i in range(1, iterations + 1):
-    BER_results[f'clipped_iteration {i}'] = []
-    BER_results[f'clipped_filtered_iteration {i}'] = []
 
 # todo: make variable names more consistent
 
@@ -108,8 +112,8 @@ for EbNo_dB in EbNo_range:
     # Counters for bit errors
     bit_error_no_clip = 0
     bit_error_predicted = 0
-    bit_error_clipped = {i: 0 for i in range(1, iterations + 1)}
-    bit_error_filtered = {i: 0 for i in range(1, iterations + 1)}
+    bit_error_scf_clipped = 0
+    bit_error_scf = 0
     total_bits = 0
 
     t2 = time.time()
@@ -153,52 +157,40 @@ for EbNo_dB in EbNo_range:
         t4 = time.time()
         num_symb_minus_iterations_loop_minus_nn += t4 - t3
 
-        rx_symbols_filtered = None
-        for i in range(1, iterations + 1):
-            # Get clipped signal (no filtering)
-            tx_time_oversampled = oversample_time(tx_symbols, N, L)
-            clipped_filtered_time, clipped_time = clip_and_filter_time(tx_time_oversampled, cr, N)
-            # clipped_time = clip_time(tx_time_oversampled, cr)
+        rx_symbols_scf = None
 
-            # # Downsample back to original rate (take every L-th sample)
-            # clipped_downsampled = clipped_time[::L]
+        tx_time_oversampled = tx_time_oversampled_base.copy()
+        # Process SCF (1 Step replacing the 3 ICF iterations)
+        filtered_time_scf, clipped_time_scf = scf_time2(tx_time_oversampled, cr, N, iterations=iterations)
 
-            rx_symbols_clipped = emulate_awgn_channel(clipped_time, CP, SNR_dB, L)
+        rx_symbols_scf_clipped = emulate_awgn_channel(clipped_time_scf, CP, SNR_dB, L)
 
-            if mod == "16qam":
-                rx_bits_clipped = qam16_demod(rx_symbols_clipped, bits=True)
-            elif mod == "qpsk":
-                rx_bits_clipped = qpsk_demod(rx_symbols_clipped, bits=True)
+        if mod == "16qam":
+            rx_bits_scf_clipped = qam16_demod(rx_symbols_scf_clipped, bits=True)
+        elif mod == "qpsk":
+            rx_bits_scf_clipped = qpsk_demod(rx_symbols_scf_clipped, bits=True)
 
-            bit_error_clipped[i] += np.sum(tx_bits != rx_bits_clipped)
+        bit_error_scf_clipped += np.sum(tx_bits != rx_bits_scf_clipped)
 
+        # rx_symbols_filtered = emulate_awgn_channel(filtered_downsampled, CP, SNR_dB)
+        rx_symbols_scf = emulate_awgn_channel(filtered_time_scf, CP, SNR_dB, L)
 
-            # Get clipped + filtered signal
-            # clipped_filtered_time, _ = clip_and_filter_time(tx_time_oversampled, cr, N)
-            filtered_downsampled = clipped_filtered_time[::L]
+        if mod == "16qam":
+            rx_bits_scf = qam16_demod(rx_symbols_scf, bits=True)
+        elif mod == "qpsk":
+            rx_bits_scf = qpsk_demod(rx_symbols_scf, bits=True)
 
-            # rx_symbols_filtered = emulate_awgn_channel(filtered_downsampled, CP, SNR_dB)
-            rx_symbols_filtered = emulate_awgn_channel(clipped_filtered_time, CP, SNR_dB, L)
+        bit_error_scf += np.sum(tx_bits != rx_bits_scf)
 
-            if mod == "16qam":
-                rx_bits_filtered = qam16_demod(rx_symbols_filtered, bits=True)
-            elif mod == "qpsk":
-                rx_bits_filtered = qpsk_demod(rx_symbols_filtered, bits=True)
-
-            bit_error_filtered[i] += np.sum(tx_bits != rx_bits_filtered)
-
-            # if EbNo_dB == EbNo_range[0] and not plotted:
-            #     plot_constellation(tx_symbols, mod, limit, title=f'Transmitted Constellation at E$_b$/N$_0$ = {EbNo_dB}dB', label='Tx Symbols', color='black')
-            #     plot_constellation(rx_symbols_no_clip, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (No Clip)', label='Rx Symbols (No Clip)', color='black')
-            #     plot_constellation(rx_symbols_clipped, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Clipped)', label='Rx Symbols (Clipped)', color='magenta')
-            #     plot_constellation(rx_symbols_filtered, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Filtered)', label='Rx Symbols (Filtered)', color='red')
-
-            # ? why not rx_symbols_filtered
-            tx_symbols = np.fft.fft(filtered_downsampled)
-            # tx_symbols = rx_symbols_filtered
+        # if EbNo_dB == EbNo_range[0] and not plotted:
+        #     plot_constellation(tx_symbols, mod, limit, title=f'Transmitted Constellation at E$_b$/N$_0$ = {EbNo_dB}dB', label='Tx Symbols', color='black')
+        #     plot_constellation(rx_symbols_no_clip, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (No Clip)', label='Rx Symbols (No Clip)', color='black')
+        #     plot_constellation(rx_symbols_scf_clipped, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Clipped)', label='Rx Symbols (Clipped)', color='magenta')
+        #     plot_constellation(rx_symbols_scf, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Filtered)', label='Rx Symbols (Filtered)', color='blue')
 
         if (EbNo_dB == EbNo_range[0] or EbNo_dB == EbNo_range[-1]) and not plotted:
-            plot_constellation(rx_symbols_filtered, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Filtered)', label='Rx Symbols (Filtered)', color='red')
+            plot_constellation(rx_symbols_scf, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Filtered)', label='Rx Symbols (Filtered)', color='blue')
+
         t5 = time.time()
         iterations_loop += t5 - t4
 
@@ -253,17 +245,16 @@ for EbNo_dB in EbNo_range:
     # Calculate BER for this Eb/No
     ber_no_clip = bit_error_no_clip / total_bits
     ber_theory = ber_theoretical(EbNo_dB, M)
+    ber_scf_clipped = bit_error_scf_clipped / total_bits
+    ber_scf = bit_error_scf / total_bits
     ber_predicted = bit_error_predicted / total_bits
 
     BER_results['no_clipping'].append(ber_no_clip)
     BER_results['predicted'].append(ber_predicted)
 
-    for i in range(1, iterations + 1):
-        ber_clipped = bit_error_clipped[i] / total_bits
-        ber_filtered = bit_error_filtered[i] / total_bits
-        BER_results[f'clipped_iteration {i}'].append(ber_clipped)
-        BER_results[f'clipped_filtered_iteration {i}'].append(ber_filtered)
-        # ber_theory_list.append(ber_theory)
+    BER_results[f'clipped_scf'].append(ber_scf_clipped)
+    BER_results[f'scf'].append(ber_scf)
+    # ber_theory_list.append(ber_theory)
 
     print(f"Eb/No: {EbNo_dB:.2f} dB | BER (No clip): {ber_no_clip:.6f} | BER (Theory): {ber_theory:.6f}")
     t8 = time.time()
@@ -284,8 +275,8 @@ title = f"BER vs SNR\n{params}"
 # # print(labels)
 # # plot_ber(EbNo_range, BER_results.values(), title, labels, M)
 
-labels = ["Unclipped", "ICF 3 Iterations", "Predicted"]
-plot_ber(EbNo_range, [BER_results["no_clipping"], BER_results[f'clipped_filtered_iteration {iterations - 1}'], BER_results['predicted']], title, labels, M)
+labels = ["Unclipped", f"SCF (imitating {iterations} Iterations)", "Predicted"]
+plot_ber(EbNo_range, [BER_results["no_clipping"], BER_results['scf'], BER_results['predicted']], title, labels, M)
 
 end = time.time()
 # ~s (num_symb = 1)

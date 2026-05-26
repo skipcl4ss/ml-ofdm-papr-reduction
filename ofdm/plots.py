@@ -96,12 +96,16 @@ def plot_ccdf_compare(val_list, title=None, label=None, metric='PAPR', save=Fals
                          # marker="D",
                          label=label[i])
         elif any(k in name for k in ("original", "unclipped")):
-            plt.semilogy(sorted_vals, y_axis, color="b", linewidth=2,
+            plt.semilogy(sorted_vals, y_axis, color="k", linewidth=2,
                          # marker="s",
                          label=label[i])
         elif any(k in name for k in ("filtered", "icf")):
             plt.semilogy(sorted_vals, y_axis, color="r", linewidth=2,
                          # marker="o",
+                         label=label[i])
+        elif any(k in name for k in ("simplified", "scf")):
+            plt.semilogy(sorted_vals, y_axis, color="b", linewidth=2,
+                         # marker="^",
                          label=label[i])
         # elif "clipped" in label[i].lower():
         #     plt.semilogy(sorted_vals, y_axis, color="b", linewidth=2,
@@ -166,9 +170,11 @@ def plot_ber(EbNo_range, val_list, title=None, label=None, M=4, save=False):
         if any(k in name for k in ("nn", "neural", "predicted", "proposed")):
             plt.semilogy(EbNo_range, vals, color="g", linewidth=2, marker="D", label=label[i])
         elif any(k in name for k in ("original", "unclipped")):
-            plt.semilogy(EbNo_range, vals, color="b", linewidth=2, marker="s", label=label[i])
+            plt.semilogy(EbNo_range, vals, color="k", linewidth=2, marker="s", label=label[i])
         elif any(k in name for k in ("filtered", "icf")):
             plt.semilogy(EbNo_range, vals, color="r", linewidth=2, marker="o", label=label[i])
+        elif any(k in name for k in ("simplified", "scf")):
+            plt.semilogy(EbNo_range, vals, color="b", linewidth=2, marker="^", label=label[i])
         # elif "clipped" in label[i].lower():
         #     plt.semilogy(EbNo_range, vals, color="b", linewidth=2, marker="*", label=label[i])
         else:
@@ -279,6 +285,7 @@ def plot_signals(signals, labels, iterations=3):
     # # plt.tight_layout()
     # plt.show()
 
+# todo: add CR externally, so that clipped signal becomes unneeded
 def plot_signals2(signals, labels, iterations=3):
     top = np.max(np.abs(signals['original']))
     right = len(next(iter(signals.values())))

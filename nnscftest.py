@@ -1,9 +1,9 @@
 import numpy as np
 from ofdm.metrics import calculate_papr, calculate_cm
-from ofdm.plots import plot_ccdf, plot_ccdf_compare
+from ofdm.plots import plot_ccdf, plot_ccdf_compare, plot_signals
 import torch
 from torch.utils.data import Dataset, DataLoader, Subset
-from nnicf import NNICFMapper, device, denormalize, criterion
+from nnscf import NNICFMapper, device, denormalize, criterion
 import os
 import time
 
@@ -24,6 +24,11 @@ mod = "16qam"
 # mod = "qpsk"
 print(f"Using {mod.upper()} modulation technique")
 
+# clipping technique
+# tech = "icf"
+tech = "scf"
+print(f"Using {tech} clipping technique")
+
 # Hyperparameters
 epochs = 100
 # using 0.001 for Adam and 0.01 for LBFGS as default values
@@ -39,31 +44,33 @@ opt = "Adam"
 print(f"Using {opt} optimizer")
 
 # Data splitting
+# ! make sure that the splitting is the same as in renormalization.ipynb
+datasize = 100
+# datasize = 120
 train_size = 70
 val_size = 10
-test_size = 100 - train_size - val_size
+test_size = datasize - train_size - val_size
 if test_size:
     one_batch = None
 else:
     test_size = 1
     one_batch = "00"
 train_val_test_str = f"{train_size}_{val_size}_{test_size}" if val_size else f"{train_size}_{test_size}"
-print(f"dataset is split into {train_size} training files, and {val_size} validation and {test_size} testing batches respectively ({train_val_test_str} used in naming files)")
+print(f"dataset of size {datasize} is split into {train_size} training files, and {val_size} validation and {test_size} testing batches respectively ({train_val_test_str} used in naming files)")
 
 batch_suffix = ""
 if one_batch:
     batch_suffix = f"Batch #{one_batch}"
     print(f"This one batch is of index {one_batch}")
-    if train_size + val_size == 100:
+    if train_size + val_size == datasize:
         print(batch_suffix, "was already used in training")
 
-params = f"{opt} optimizer {mod.upper()} lr = {lr}\n({train_size} Training/{val_size} Validation/{test_size} Testing){" (" + batch_suffix + ")" if batch_suffix else ''}"
+params = f"{opt} optimizer {tech.upper()} {mod.upper()} lr = {lr}\n({train_size} Training/{val_size} Validation/{test_size} Testing){" (" + batch_suffix + ")" if batch_suffix else ''}"
 print(params)
 
 og_pt_dir = "./pt_dir/"
 pt_dir = "./pt_dir_globalnorm/"
-model_dir = "./trained_models/"
-# model_dir = "./new architecture/"
+model_dir = "./new architecture/"
 graph_dir = "./new architecture/"
 os.makedirs(og_pt_dir, exist_ok=True)
 os.makedirs(pt_dir, exist_ok=True)
@@ -81,11 +88,11 @@ class FastOFDMDataset(Dataset):
         self.part = part
 
     def __len__(self):
-        return 100 # Assuming exactly 100 pre-computed .pt files, regardless of train/test split
+        return datasize # Assuming exactly 100 pre-computed .pt files, regardless of train/test split
 
     def __getitem__(self, idx):
         # Instantly loads the pre-normalized tensors directly into memory!
-        file_path = os.path.join(self.folder_path, f"{mod}_tx_rx_part_{idx:02d}_{self.part}.pt")
+        file_path = os.path.join(self.folder_path, f"{mod}_{tech}_part_{idx:03d}_{self.part}.pt")
         # Load the dictionary
         data_pkg = torch.load(file_path, weights_only=False)
 
@@ -101,8 +108,8 @@ cell9 = time.time()
 Test_Mod_Re = NNICFMapper().to(device)
 Test_Mod_Im = NNICFMapper().to(device)
 
-Test_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
-Test_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+Test_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+Test_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
 
 Test_Mod_Re.eval()
 Test_Mod_Im.eval()
@@ -113,8 +120,8 @@ dataset_real = FastOFDMDataset(pt_dir, part='real')
 dataset_imag = FastOFDMDataset(pt_dir, part='imag')
 if one_batch:
     # 2. Grab one batch of data to test (Load the dictionary packages)
-    pkg_real = torch.load(os.path.join(pt_dir, f"{mod}_tx_rx_part_{one_batch}_real.pt"), weights_only=False)
-    pkg_imag = torch.load(os.path.join(pt_dir, f"{mod}_tx_rx_part_{one_batch}_imag.pt"), weights_only=False)
+    pkg_real = torch.load(os.path.join(pt_dir, f"{mod}_{tech}_part_{one_batch}_real.pt"), weights_only=False)
+    pkg_imag = torch.load(os.path.join(pt_dir, f"{mod}_{tech}_part_{one_batch}_imag.pt"), weights_only=False)
     # Extract tensors
     test_X_real, test_Y_real = pkg_real['X_norm'], pkg_real['Y_norm']
     test_X_imag, test_Y_imag = pkg_imag['X_norm'], pkg_imag['Y_norm']
@@ -138,11 +145,11 @@ if one_batch:
     predicted_complex = pred_denorm_real + 1j * pred_denorm_imag
 else:
 #     # 2. Setup the Test Data (Files train_size->99)
-#     test_dataset_real = Subset(FastOFDMDataset(pt_dir, part='real'), range(train_size, 100))
-#     test_dataset_imag = Subset(FastOFDMDataset(pt_dir, part='imag'), range(train_size, 100))
+#     test_dataset_real = Subset(FastOFDMDataset(pt_dir, part='real'), range(train_size, datasize))
+#     test_dataset_imag = Subset(FastOFDMDataset(pt_dir, part='imag'), range(train_size, datasize))
     # 2. Setup the Test Data (Files (train_size+val_size)->99)
-    test_dataset_real = Subset(dataset_real, range(train_size + val_size, 100))
-    test_dataset_imag = Subset(dataset_imag, range(train_size + val_size, 100))
+    test_dataset_real = Subset(dataset_real, range(train_size + val_size, datasize))
+    test_dataset_imag = Subset(dataset_imag, range(train_size + val_size, datasize))
 
     # We set shuffle=False to ensure real and imag batches stay perfectly aligned
     test_loader_real = DataLoader(test_dataset_real, batch_size=None, shuffle=False)

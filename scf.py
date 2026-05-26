@@ -1,12 +1,14 @@
 import numpy as np
 from ofdm.modem import qam16_mod, qpsk_mod
-from ofdm.candf import oversample_time, clip_and_filter_time
+from ofdm.candf import oversample_time, scf_time, scf_time2
 from ofdm.metrics import calculate_papr, calculate_cm
 from ofdm.plots import plot_ccdf_compare, plot_ccdf, plot_signals, plot_signals2
 import torch
 from nnscf import NNICFMapper, normalize, denormalize
 import os
 import time
+
+# todo: clean up ths and other scf files
 
 start = time.time()
 
@@ -29,8 +31,8 @@ M = 16
 # M = 4
 
 # clipping technique
-tech = "icf"
-# tech = "scf"
+# tech = "icf"
+tech = "scf"
 
 # Hyperparameters (used only in saving and loading files, not in the actual C&F process)
 lr = 0.001
@@ -70,8 +72,8 @@ NN_Mod_Re = NNICFMapper().to(device)
 NN_Mod_Im = NNICFMapper().to(device)
 
 # Inject the trained weights
-NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
-NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
 
 NN_Mod_Re.eval()
 NN_Mod_Im.eval()
@@ -79,19 +81,17 @@ NN_Mod_Im.eval()
 
 # Simulation
 unclipped_papr, unclipped_cm = [], []
-iterations_papr = [[] for _ in range(iterations)]
-iterations_cm = [[] for _ in range(iterations)]
+scf_papr, scf_cm = [], []
 
 samples_per_L_minus_iterations_loop = 0
 iterations_loop = 0
 
-x_time, x_clip, x_filt = [], [], []
+x_time, x_clip_scf, x_scf = [], [], []
 
 tx_time, rx_time = [[], []], [[], []]
 for _ in range(samples_per_L):
     t1 = time.time()
     tx_data = np.random.randint(0, M, N)
-    # todo: see a way to generalize or wrap the modulation part
     if mod == "16qam":
         # Generate 16-QAM Symbols
         tx_symbols = qam16_mod(tx_data)
@@ -112,20 +112,20 @@ for _ in range(samples_per_L):
 
     t2 = time.time()
     samples_per_L_minus_iterations_loop += t2 - t1
-    # Process C&F
-    x_filt = x_time.copy()
-    for i in range(iterations):
-        x_filt, x_clip = clip_and_filter_time(x_filt, cr, N)
 
-        # Store PAPR of the current iterative result
-        iterations_papr[i].append(calculate_papr(x_filt))
-        iterations_cm[i].append(calculate_cm(x_filt))
+    # Process SCF (1 Step replacing the 3 ICF iterations)
+    x_scf, x_clip_scf = scf_time2(x_time, cr, N, iterations=iterations)
+
+    # Store PAPR of the current iterative result
+    scf_papr.append(calculate_papr(x_scf))
+    scf_cm.append(calculate_cm(x_scf))
+
     t3 = time.time()
     iterations_loop += t3 - t2
 
     # store the final iteration's real and imag parts separately
-    rx_time[0].append(np.real(x_filt).astype(np.float32, copy=False))
-    rx_time[1].append(np.imag(x_filt).astype(np.float32, copy=False))
+    rx_time[0].append(np.real(x_scf).astype(np.float32, copy=False))
+    rx_time[1].append(np.imag(x_scf).astype(np.float32, copy=False))
     t4 = time.time()
     samples_per_L_minus_iterations_loop += t4 - t1
 
@@ -134,8 +134,9 @@ rx_time = np.array(rx_time, dtype=np.float32)
 
 signals = {
     'original': x_time,
-    'clipped': x_clip,
-    'filtered': x_filt
+    # 'clipped_scf': x_clip_scf,
+    'clipped': x_clip_scf,
+    'scf': x_scf
 }
 
 middle = time.time()
@@ -177,9 +178,9 @@ pred_cm = np.array(pred_cm)
 
 # 6. Plot the CCDF
 title = f"NN{tech.upper()} Predicted OFDM\n{params}"
-labels = ['Original', f'ICF ({iterations} iteration{"s" if iterations > 1 else ""})', f'NN{tech.upper()} Predicted']
-papr_list = [unclipped_papr, iterations_papr[-1], pred_papr]
-cm_list = [unclipped_cm, iterations_cm[-1], pred_cm]
+labels = ['Original', f'SCF (imitating {iterations} iteration{"s" if iterations > 1 else ""})', f'NN{tech.upper()} Predicted']
+papr_list = [unclipped_papr, scf_papr, pred_papr]
+cm_list = [unclipped_cm, scf_cm, pred_cm]
 
 # plot_ccdf_compare(papr_list, f"Original vs ICF vs {title}", labels)
 plot_ccdf_compare(cm_list, f"Original vs ICF vs {title}", labels, metric="CM")
@@ -199,14 +200,12 @@ cm_percentile = (1.0 - cm_target_y) * 100.0
 # (This completely replaces the need for y_axis, np.where, and manual sorting!)
 papr_vlines = [
     np.percentile(unclipped_papr, papr_percentile),
-    np.percentile(iterations_papr[-1], papr_percentile),
-    np.percentile(pred_papr, papr_percentile)
+    np.percentile(scf_papr, papr_percentile)
 ]
 
 cm_vlines = [
     np.percentile(unclipped_cm, cm_percentile),
-    np.percentile(iterations_cm[-1], cm_percentile),
-    np.percentile(pred_cm, cm_percentile)
+    np.percentile(scf_cm, cm_percentile)
 ]
 
 # cm_vlines = [
@@ -230,7 +229,7 @@ print()
 print("time taken in the inner iterations loop:", iterations_loop)
 print("time taken in outer samples_per_L loop:", samples_per_L_minus_iterations_loop)
 
-labels = ['Original', f'Clipped ({iterations} iteration{"s" if iterations > 1 else ""})', f'ICF ({iterations} iteration{"s" if iterations > 1 else ""})', f'NN{tech.upper()} Predicted']
+labels = ['Original', 'Clipped (SCF)', f'SCF (Imitating {iterations} iteration{"s" if iterations > 1 else ""})', f'NN{tech.upper()} Predicted']
 # plot_signals(signals, labels)
 plot_signals2(signals, labels)
 

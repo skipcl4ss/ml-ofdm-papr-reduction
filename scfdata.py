@@ -1,10 +1,12 @@
 import numpy as np
 from ofdm.modem import qam16_mod, qpsk_mod
-from ofdm.candf import oversample_time, clip_and_filter_time
+from ofdm.candf import oversample_time, clip_and_filter_time, scf_time, scf_time2
 import torch
 from nnscf import normalize
 import os
 import time
+
+# todo: clean up ths and other scf files
 
 start = time.time()
 
@@ -21,13 +23,12 @@ cr = 10 ** (cr_dB / 20)
 iterations = 3
 
 # modulation scheme
-# mod = "16qam"
-# M = 16
-mod = "qpsk"
-M = 4
-
-# datasize = 100
-datasize = 120
+mod = "16qam"
+M = 16
+# mod = "qpsk"
+# M = 4
+datasize = 100
+# datasize = 120
 
 # todo: see a way to add ber to the nnicf data so that we can use it in the loss function
 
@@ -62,16 +63,14 @@ for i in range(datasize):
 
         t2 = time.time()
         samples_per_L_minus_iterations_loop += t2 - t1
-        # Process C&F
-        x_filt = x_time.copy()
-        for j in range(iterations):
-            x_filt, _ = clip_and_filter_time(x_filt, cr, N)
+        # Process SCF (1 Step replacing the 3 ICF iterations)
+        x_scf, _ = scf_time2(x_time, cr, N, iterations=iterations)
         t3 = time.time()
         iterations_loop += t3 - t2
 
         # store the final iteration's real and imag parts separately
-        rx_time[0].append(np.real(x_filt).astype(np.float32, copy=False))
-        rx_time[1].append(np.imag(x_filt).astype(np.float32, copy=False))
+        rx_time[0].append(np.real(x_scf).astype(np.float32, copy=False))
+        rx_time[1].append(np.imag(x_scf).astype(np.float32, copy=False))
         t4 = time.time()
         samples_per_L_minus_iterations_loop += t4 - t1
     t5 = time.time()
@@ -93,7 +92,7 @@ for i in range(datasize):
         'Y_norm': Y_real_norm.detach().clone().to(torch.float32),
         'X_min': X_r_min, 'X_max': X_r_max,
         'Y_min': Y_r_min, 'Y_max': Y_r_max
-    }, os.path.join(pt_dir, f"{mod}_icf_part_{i:03d}_real.pt"))
+    }, os.path.join(pt_dir, f"{mod}_scf_part_{i:03d}_real.pt"))
 
     # Save Imaginary File as PyTorch Dictionary
     torch.save({
@@ -101,7 +100,7 @@ for i in range(datasize):
         'Y_norm': Y_imag_norm.detach().clone().to(torch.float32),
         'X_min': X_i_min, 'X_max': X_i_max,
         'Y_min': Y_i_min, 'Y_max': Y_i_max
-    }, os.path.join(pt_dir, f"{mod}_icf_part_{i:03d}_imag.pt"))
+    }, os.path.join(pt_dir, f"{mod}_scf_part_{i:03d}_imag.pt"))
 
     # Manually delete variables to free RAM for the next iteration
     del tx_time, rx_time, X_real_norm, X_imag_norm, Y_real_norm, Y_imag_norm
@@ -114,7 +113,7 @@ for i in range(datasize):
     hundred_minus_samples_per_L_loop += t6 - t5
 
 end = time.time()
-# ~(480 - 830)s
+# ~4:33.3 min
 print(f'\nTotal execution time: {int((end - start) // 60)}:{(end - start) % 60:.1f} minutes')
 print()
 print(f"time taken in the inner iterations loop: {int(iterations_loop // 60)}:{iterations_loop % 60:.1f} minutes")
