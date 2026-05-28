@@ -81,7 +81,7 @@ def filter_time(clipped_time, N):
 
     return clipped_filtered_time, kept_freq
 
-def scf_time(tx_time_oversampled, CR, N, iterations=3):
+def scf(tx_time_oversampled, CR, N, iterations=3):
     """
     Simplified Clipping and Filtering (SCF) algorithm.
     Approximates multiple ICF iterations with a single mathematical step.
@@ -119,7 +119,7 @@ def scf_time(tx_time_oversampled, CR, N, iterations=3):
 
     return x_n_bar, clipped_time
 
-def scf_time2(tx_time_oversampled, CR, N, iterations=3):
+def scf2(tx_time_oversampled, CR, N, iterations=3):
     """
     Simplified Clipping and Filtering (SCF) algorithm.
     Approximates multiple ICF iterations with a single mathematical step.

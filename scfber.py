@@ -1,10 +1,10 @@
 import numpy as np
-from ofdm.modem import qam16_mod, qpsk_mod, qam16_demod, qpsk_demod
-from ofdm.candf import oversample_time, clip_and_filter_time, emulate_awgn_channel, scf_time, scf_time2
+from ofdm.modem import get_modem
+from ofdm.candf import oversample_time, clip_and_filter_time, emulate_awgn_channel, scf, scf2
 from ofdm.metrics import ber_theoretical
 from ofdm.plots import plot_ber, plot_constellation
 import torch
-from nnscf import NNICFMapper, normalize, denormalize
+from nnscf import NNSCFMapper, normalize, denormalize
 import os
 import time
 
@@ -25,9 +25,15 @@ iterations = 3
 
 # modulation scheme
 mod = "16qam"
-M = 16
 # mod = "qpsk"
-# M = 4
+# edits the stops to be same as the paper, and declares M for the modem
+if mod == "16qam":
+    M = 16
+    stop = 14
+elif mod == "qpsk":
+    M = 4
+    stop = 8
+modulate, demodulate = get_modem(M)
 
 # clipping technique
 # tech = "icf"
@@ -67,8 +73,8 @@ model_dir = "./new architecture/"
 # Check for GPU availability and set device accordingly
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Instantiate the empty models
-NN_Mod_Re = NNICFMapper().to(device)
-NN_Mod_Im = NNICFMapper().to(device)
+NN_Mod_Re = NNSCFMapper().to(device)
+NN_Mod_Im = NNSCFMapper().to(device)
 
 # Inject the trained weights
 NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
@@ -83,7 +89,6 @@ BER_results = {
     'clipped_scf': [],
     'scf': [],
     'predicted': []
-
 }
 
 # todo: make variable names more consistent
@@ -93,13 +98,6 @@ num_symb_minus_iterations_loop_minus_nn = 0
 iterations_loop = 0
 nn_calc_time = 0
 
-# edits the stops to be same as the paper
-if mod == "16qam":
-    stop = 14
-    M = 16
-elif mod == "qpsk":
-    stop = 8
-    M = 4
 EbNo_range = np.arange(0, stop + 1, 1) # does not affect ccdf
 bits_per_symbol = int(np.log2(M))
 num_symb = 100
@@ -124,12 +122,7 @@ for EbNo_dB in EbNo_range:
         # Generate random bits and modulate
         tx_bits = np.random.randint(0, 2, int(N * bits_per_symbol))
 
-        if mod == "16qam":
-            # Generate 16-QAM Symbols
-            tx_symbols = qam16_mod(tx_bits, bits=True)
-        elif mod == "qpsk":
-            # Generate QPSK Symbols
-            tx_symbols = qpsk_mod(tx_bits, bits=True)
+        tx_symbols = modulate(tx_bits, bits=True)
 
         if (EbNo_dB == EbNo_range[0] or EbNo_dB == EbNo_range[-1]) and not plotted:
             limit = np.max(np.abs(tx_symbols)) * 1.1
@@ -143,10 +136,7 @@ for EbNo_dB in EbNo_range:
         if (EbNo_dB == EbNo_range[0] or EbNo_dB == EbNo_range[-1]) and not plotted:
             plot_constellation(rx_symbols_no_clip, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (No Clip)', label='Rx Symbols (No Clip)', color='black')
 
-        if mod == "16qam":
-            rx_bits_no_clip = qam16_demod(rx_symbols_no_clip, bits=True)
-        elif mod == "qpsk":
-            rx_bits_no_clip = qpsk_demod(rx_symbols_no_clip, bits=True)
+        rx_bits_no_clip = demodulate(rx_symbols_no_clip, bits=True)
 
         bit_error_no_clip += np.sum(tx_bits != rx_bits_no_clip)
 
@@ -161,24 +151,18 @@ for EbNo_dB in EbNo_range:
 
         tx_time_oversampled = tx_time_oversampled_base.copy()
         # Process SCF (1 Step replacing the 3 ICF iterations)
-        filtered_time_scf, clipped_time_scf = scf_time2(tx_time_oversampled, cr, N, iterations=iterations)
+        filtered_time_scf, clipped_time_scf = scf2(tx_time_oversampled, cr, N, iterations=iterations)
 
         rx_symbols_scf_clipped = emulate_awgn_channel(clipped_time_scf, CP, SNR_dB, L)
 
-        if mod == "16qam":
-            rx_bits_scf_clipped = qam16_demod(rx_symbols_scf_clipped, bits=True)
-        elif mod == "qpsk":
-            rx_bits_scf_clipped = qpsk_demod(rx_symbols_scf_clipped, bits=True)
+        rx_bits_scf_clipped = demodulate(rx_symbols_scf_clipped, bits=True)
 
         bit_error_scf_clipped += np.sum(tx_bits != rx_bits_scf_clipped)
 
         # rx_symbols_filtered = emulate_awgn_channel(filtered_downsampled, CP, SNR_dB)
         rx_symbols_scf = emulate_awgn_channel(filtered_time_scf, CP, SNR_dB, L)
 
-        if mod == "16qam":
-            rx_bits_scf = qam16_demod(rx_symbols_scf, bits=True)
-        elif mod == "qpsk":
-            rx_bits_scf = qpsk_demod(rx_symbols_scf, bits=True)
+        rx_bits_scf = demodulate(rx_symbols_scf, bits=True)
 
         bit_error_scf += np.sum(tx_bits != rx_bits_scf)
 
@@ -230,10 +214,7 @@ for EbNo_dB in EbNo_range:
             plot_constellation(predicted_symbols, mod, limit, title=f'Predicted Constellation at E$_b$/N$_0$ = {EbNo_dB}dB', label='Rx Symbols (Predicted)', color='green')
         plotted = True
 
-        if mod == "16qam":
-            predicted_bits = qam16_demod(predicted_symbols, bits=True)
-        elif mod == "qpsk":
-            predicted_bits = qpsk_demod(predicted_symbols, bits=True)
+        predicted_bits = demodulate(predicted_symbols, bits=True)
 
         bit_error_predicted += np.sum(tx_bits != predicted_bits)
 
@@ -284,6 +265,6 @@ end = time.time()
 print(f"\nTotal execution time: {end - start:.2f} seconds")
 print()
 print("time taken in the inner iterations loop:", iterations_loop)
-print("time taken in the nnicf calculations:", nn_calc_time)
+print(f"time taken in the nn{tech} calculations:", nn_calc_time)
 print("time taken in the middle iterations loop:", num_symb_minus_iterations_loop_minus_nn)
 print("time taken in outer EbNo loop loop:", EbNo_minus_num_symb_loop)

@@ -74,3 +74,9 @@ def qpsk_demod(rx_symbols, bits=False):
         rx_data = np.unpackbits(rx_data.astype(np.uint8)[:, None], axis=1)[:, -int(np.log2(4)):].flatten()
 
     return rx_data
+
+def get_modem(M):
+    if M == 4:
+        return qpsk_mod, qpsk_demod
+    elif M == 16:
+        return qam16_mod, qam16_demod

@@ -1,5 +1,5 @@
 import numpy as np
-from ofdm.modem import qam16_mod, qpsk_mod
+from ofdm.modem import get_modem
 from ofdm.candf import oversample_time, clip_and_filter_time
 import torch
 from nnscf import normalize
@@ -21,22 +21,26 @@ cr = 10 ** (cr_dB / 20)
 iterations = 3
 
 # modulation scheme
-# mod = "16qam"
-# M = 16
-mod = "qpsk"
-M = 4
+mod = "16qam"
+# mod = "qpsk"
+if mod == "16qam":
+    M = 16
+elif mod == "qpsk":
+    M = 4
+modulate, _ = get_modem(M)
 
-# datasize = 100
-datasize = 120
+# the actual size of the dataset
+datasize = 100
+# datasize = 120
 
-# todo: see a way to add ber to the nnicf data so that we can use it in the loss function
+# todo: see a way to add ber to the nnscf data so that we can use it in the loss function
 
 pt_dir = "./pt_dir/"
 os.makedirs(pt_dir, exist_ok=True)
 
-hundred_minus_samples_per_L_loop = 0
-samples_per_L_minus_iterations_loop = 0
-iterations_loop = 0
+datasize_minus_samples_per_L_loop = 0
+samples_per_L_minus_icf_time = 0
+icf_time = 0
 
 # tx, rx = [], []
 before_loop = time.time()
@@ -46,12 +50,7 @@ for i in range(datasize):
     for _ in range(samples_per_L):
         t1 = time.time()
         tx_data = np.random.randint(0, M, N)
-        if mod == "16qam":
-            # Generate 16-QAM Symbols
-            tx_symbols = qam16_mod(tx_data)
-        elif mod == "qpsk":
-            # Generate QPSK Symbols
-            tx_symbols = qpsk_mod(tx_data)
+        tx_symbols = modulate(tx_data)
 
         # Oversample and convert to time domain
         x_time = oversample_time(tx_symbols, N, L)
@@ -61,19 +60,21 @@ for i in range(datasize):
         tx_time[1].append(np.imag(x_time).astype(np.float32, copy=False))
 
         t2 = time.time()
-        samples_per_L_minus_iterations_loop += t2 - t1
+        samples_per_L_minus_icf_time += t2 - t1
+
         # Process C&F
         x_filt = x_time.copy()
         for j in range(iterations):
             x_filt, _ = clip_and_filter_time(x_filt, cr, N)
+
         t3 = time.time()
-        iterations_loop += t3 - t2
+        icf_time += t3 - t2
 
         # store the final iteration's real and imag parts separately
         rx_time[0].append(np.real(x_filt).astype(np.float32, copy=False))
         rx_time[1].append(np.imag(x_filt).astype(np.float32, copy=False))
         t4 = time.time()
-        samples_per_L_minus_iterations_loop += t4 - t1
+        samples_per_L_minus_icf_time += t4 - t1
     t5 = time.time()
 
     tx_time = np.array(tx_time, dtype=np.float32)
@@ -111,12 +112,12 @@ for i in range(datasize):
     print(f"Iteration {i + 1}/{datasize} completed in {loop_end - loop_start:.2f} seconds")
     print(f"{loop_end - before_loop:.2f} seconds passed since before loop start")
     t6 = time.time()
-    hundred_minus_samples_per_L_loop += t6 - t5
+    datasize_minus_samples_per_L_loop += t6 - t5
 
 end = time.time()
 # ~(480 - 830)s
 print(f'\nTotal execution time: {int((end - start) // 60)}:{(end - start) % 60:.1f} minutes')
 print()
-print(f"time taken in the inner iterations loop: {int(iterations_loop // 60)}:{iterations_loop % 60:.1f} minutes")
-print(f"time taken in middle samples_per_L loop: {int(samples_per_L_minus_iterations_loop // 60)}:{samples_per_L_minus_iterations_loop % 60:.1f} minutes")
-print(f"time taken in outer {datasize} iterations loop: {int(hundred_minus_samples_per_L_loop // 60)}:{hundred_minus_samples_per_L_loop % 60:.1f} minutes")
+print(f"time taken in the inner iterations loop: {int(icf_time // 60)}:{icf_time % 60:.1f} minutes")
+print(f"time taken in middle samples_per_L loop: {int(samples_per_L_minus_icf_time // 60)}:{samples_per_L_minus_icf_time % 60:.1f} minutes")
+print(f"time taken in outer {datasize} iterations loop: {int(datasize_minus_samples_per_L_loop // 60)}:{datasize_minus_samples_per_L_loop % 60:.1f} minutes")

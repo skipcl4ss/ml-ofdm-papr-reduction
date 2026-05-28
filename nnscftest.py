@@ -3,7 +3,7 @@ from ofdm.metrics import calculate_papr, calculate_cm
 from ofdm.plots import plot_ccdf, plot_ccdf_compare, plot_signals
 import torch
 from torch.utils.data import Dataset, DataLoader, Subset
-from nnscf import NNICFMapper, device, denormalize, criterion
+from nnscf import NNSCFMapper, device, denormalize, criterion
 import os
 import time
 
@@ -105,8 +105,8 @@ class FastOFDMDataset(Dataset):
 cell9 = time.time()
 
 # 1. Load the Saved Models
-Test_Mod_Re = NNICFMapper().to(device)
-Test_Mod_Im = NNICFMapper().to(device)
+Test_Mod_Re = NNSCFMapper().to(device)
+Test_Mod_Im = NNSCFMapper().to(device)
 
 Test_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
 Test_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
@@ -222,9 +222,9 @@ orig_cm, clip_cm, pred_cm = [], [], []
 
 # Iterate through the arrays
 for i in range(test_size * samples_per_L if not one_batch else samples_per_L):
-    orig_papr.append(calculate_papr(original_complex[i]))
-    clip_papr.append(calculate_papr(clipped_complex[i]))
-    pred_papr.append(calculate_papr(predicted_complex[i]))
+    # orig_papr.append(calculate_papr(original_complex[i]))
+    # clip_papr.append(calculate_papr(clipped_complex[i]))
+    # pred_papr.append(calculate_papr(predicted_complex[i]))
 
     orig_cm.append(calculate_cm(original_complex[i]))
     clip_cm.append(calculate_cm(clipped_complex[i]))
@@ -234,13 +234,13 @@ orig_papr, clip_papr, pred_papr = np.array(orig_papr), np.array(clip_papr), np.a
 orig_cm, clip_cm, pred_cm = np.array(orig_cm), np.array(clip_cm), np.array(pred_cm)
 
 # 6. Plot the CCDF
-title = f'NNICF Predicted OFDM\n{params}'
-labels = ['Original OFDM', 'ICF', 'NNICF Predicted OFDM']
+title = f'NN{tech.upper()} Predicted OFDM\n{params}'
+labels = ['Original OFDM', f'{tech.upper()}', f'NN{tech.upper()} Predicted OFDM']
 papr_list = [orig_papr, clip_papr, pred_papr]
 cm_list = [orig_cm, clip_cm, pred_cm]
 
-# plot_ccdf_compare(papr_list, f'Original vs ICF vs {title}', labels)
-plot_ccdf_compare(cm_list, f'Original vs ICF vs {title}', labels, metric="CM")
+# plot_ccdf_compare(papr_list, f'Original vs {tech.upper()} vs {title}', labels)
+plot_ccdf_compare(cm_list, f'Original vs {tech.upper()} vs {title}', labels, metric="CM")
 
 # fixme: both percentile and max are not the most efficient solutions
 
@@ -255,11 +255,11 @@ cm_percentile = (1.0 - cm_target_y) * 100.0
 
 # 3. Extract the exact x-axis values (PAPR/CM) where the line cuts the graph
 # (This completely replaces the need for y_axis, np.where, and manual sorting!)
-papr_vlines = [
-    np.percentile(orig_papr, papr_percentile),
-    np.percentile(clip_papr, papr_percentile),
-    np.percentile(pred_papr, papr_percentile)
-]
+# papr_vlines = [
+#     np.percentile(orig_papr, papr_percentile),
+#     np.percentile(clip_papr, papr_percentile),
+#     np.percentile(pred_papr, papr_percentile)
+# ]
 
 cm_vlines = [
     np.percentile(orig_cm, cm_percentile),

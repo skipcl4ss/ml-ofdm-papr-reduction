@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+# todo: maybe i could migrate most of the nnscf notebook dependencies here and use this script for imports
+
 # Explicitly tell PyTorch to utilize your 8 CPU cores for matrix math
 # Check for GPU availability to drastically speed up training
 # ! cuda is available only on nvidia gpu
@@ -12,6 +14,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 criterion = nn.MSELoss()
 
 # ! instead of returning only real or imag part of two datasets (tx and rx), returns only one part of one dataset
+# todo merge it with renormalization notebook
 def normalize(X_raw):
     X_batch = torch.tensor(X_raw, dtype=torch.float32)
 
@@ -38,9 +41,9 @@ class TriangularActivation(nn.Module):
     def forward(self, x):
         return torch.clamp(1.0 - torch.abs(x), min=0.0)
 
-class NNICFMapper(nn.Module):
+class NNSCFMapper(nn.Module):
     def __init__(self):
-        super(NNICFMapper, self).__init__()
+        super(NNSCFMapper, self).__init__()
         # First hidden layer: 2 neurons
         self.hidden1 = nn.Linear(1, 2)
         # Second hidden layer: 1 neuron

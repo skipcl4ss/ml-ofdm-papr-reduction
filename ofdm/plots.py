@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
 # import matplotlib.cm as cm
 # from ofdm.metrics import ccdf_theoretical
 # from ofdm.metrics import ber_theoretical
@@ -348,3 +349,23 @@ def plot_signals2(signals, labels, iterations=3):
     #
     # # plt.tight_layout()
     # plt.show()
+
+def plot_dataset_mapping(pt_file_path, title):
+    # Load the normalized tensor data
+    data = torch.load(pt_file_path, weights_only=True)
+    x_norm = data['X_norm'].cpu().numpy().flatten()
+    y_norm = data['Y_norm'].cpu().numpy().flatten()
+
+    # Plot Input vs Target
+    plt.figure(figsize=(8, 6))
+    plt.scatter(x_norm, y_norm, alpha=0.1, s=1)
+
+    # Draw a perfectly linear 1:1 reference line
+    plt.plot([-1, 1], [-1, 1], color='red', linestyle='--', label="Linear 1:1 Mapping")
+
+    plt.title(f"Dataset Mapping: {title}\n(X_norm vs Y_norm)")
+    plt.xlabel("Input Amplitude (Normalized)")
+    plt.ylabel("Target Amplitude (Normalized)")
+    plt.grid(True)
+    plt.legend(loc='lower right')
+    plt.show()

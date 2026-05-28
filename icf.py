@@ -1,12 +1,14 @@
 import numpy as np
-from ofdm.modem import qam16_mod, qpsk_mod
+from ofdm.modem import get_modem
 from ofdm.candf import oversample_time, clip_and_filter_time
 from ofdm.metrics import calculate_papr, calculate_cm
 from ofdm.plots import plot_ccdf_compare, plot_ccdf, plot_signals, plot_signals2
 import torch
-from nnscf import NNICFMapper, normalize, denormalize
+from nnscf import NNSCFMapper, normalize, denormalize
 import os
 import time
+
+# todo: reconsider whether the normalization is correctly implemented here and in other scripts
 
 start = time.time()
 
@@ -24,9 +26,12 @@ iterations = 3
 
 # modulation scheme
 mod = "16qam"
-M = 16
 # mod = "qpsk"
-# M = 4
+if mod == "16qam":
+    M = 16
+elif mod == "qpsk":
+    M = 4
+modulate, _ = get_modem(M)
 
 # clipping technique
 tech = "icf"
@@ -60,18 +65,18 @@ params = f"{opt} optimizer {tech.upper()} {mod.upper()} (N={N}, L={L}, CR={cr_dB
 # model_dir = "./trained_models/"
 model_dir = "./new architecture/"
 
-# * Load nnicf model
+# * Load nnscf model
 
 # 2. Load the trained models
 # Check for GPU availability and set device accordingly
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Instantiate the empty models
-NN_Mod_Re = NNICFMapper().to(device)
-NN_Mod_Im = NNICFMapper().to(device)
+NN_Mod_Re = NNSCFMapper().to(device)
+NN_Mod_Im = NNSCFMapper().to(device)
 
 # Inject the trained weights
-NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
-NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
 
 NN_Mod_Re.eval()
 NN_Mod_Im.eval()
@@ -79,11 +84,11 @@ NN_Mod_Im.eval()
 
 # Simulation
 unclipped_papr, unclipped_cm = [], []
-iterations_papr = [[] for _ in range(iterations)]
-iterations_cm = [[] for _ in range(iterations)]
+icf_papr = [[] for _ in range(iterations)]
+icf_cm = [[] for _ in range(iterations)]
 
-samples_per_L_minus_iterations_loop = 0
-iterations_loop = 0
+samples_per_L_minus_icf_time = 0
+icf_time = 0
 
 x_time, x_clip, x_filt = [], [], []
 
@@ -91,13 +96,7 @@ tx_time, rx_time = [[], []], [[], []]
 for _ in range(samples_per_L):
     t1 = time.time()
     tx_data = np.random.randint(0, M, N)
-    # todo: see a way to generalize or wrap the modulation part
-    if mod == "16qam":
-        # Generate 16-QAM Symbols
-        tx_symbols = qam16_mod(tx_data)
-    elif mod == "qpsk":
-        # Generate QPSK Symbols
-        tx_symbols = qpsk_mod(tx_data)
+    tx_symbols = modulate(tx_data)
 
     # Oversample and convert to time domain
     x_time = oversample_time(tx_symbols, N, L)
@@ -107,27 +106,29 @@ for _ in range(samples_per_L):
     tx_time[1].append(np.imag(x_time).astype(np.float32, copy=False))
 
     # Capture Unclipped PAPR
-    unclipped_papr.append(calculate_papr(x_time))
+    # unclipped_papr.append(calculate_papr(x_time))
     unclipped_cm.append(calculate_cm(x_time))
 
     t2 = time.time()
-    samples_per_L_minus_iterations_loop += t2 - t1
+    samples_per_L_minus_icf_time += t2 - t1
+
     # Process C&F
     x_filt = x_time.copy()
     for i in range(iterations):
         x_filt, x_clip = clip_and_filter_time(x_filt, cr, N)
 
         # Store PAPR of the current iterative result
-        iterations_papr[i].append(calculate_papr(x_filt))
-        iterations_cm[i].append(calculate_cm(x_filt))
+        icf_papr[i].append(calculate_papr(x_filt))
+        icf_cm[i].append(calculate_cm(x_filt))
+
     t3 = time.time()
-    iterations_loop += t3 - t2
+    icf_time += t3 - t2
 
     # store the final iteration's real and imag parts separately
     rx_time[0].append(np.real(x_filt).astype(np.float32, copy=False))
     rx_time[1].append(np.imag(x_filt).astype(np.float32, copy=False))
     t4 = time.time()
-    samples_per_L_minus_iterations_loop += t4 - t1
+    samples_per_L_minus_icf_time += t4 - t1
 
 tx_time = np.array(tx_time, dtype=np.float32)
 rx_time = np.array(rx_time, dtype=np.float32)
@@ -140,7 +141,7 @@ signals = {
 
 middle = time.time()
 
-# * Compare with nnicf model
+# * Compare with nnscf model
 
 # 1. Normalize the data and turn it to torch tensors
 tx_real, tx_minmax_real = normalize(tx_time[0])
@@ -170,7 +171,7 @@ signals["predicted"] = predicted_complex[-1]
 # 5. Calculate PAPR (Peak-to-Average Power Ratio) for CCDF
 pred_papr, pred_cm = [], []
 for i in range(samples_per_L):
-    pred_papr.append(calculate_papr(predicted_complex[i]))
+    # pred_papr.append(calculate_papr(predicted_complex[i]))
     pred_cm.append(calculate_cm(predicted_complex[i]))
 pred_papr = np.array(pred_papr)
 pred_cm = np.array(pred_cm)
@@ -178,11 +179,11 @@ pred_cm = np.array(pred_cm)
 # 6. Plot the CCDF
 title = f"NN{tech.upper()} Predicted OFDM\n{params}"
 labels = ['Original', f'ICF ({iterations} iteration{"s" if iterations > 1 else ""})', f'NN{tech.upper()} Predicted']
-papr_list = [unclipped_papr, iterations_papr[-1], pred_papr]
-cm_list = [unclipped_cm, iterations_cm[-1], pred_cm]
+papr_list = [unclipped_papr, icf_papr[-1], pred_papr]
+cm_list = [unclipped_cm, icf_cm[-1], pred_cm]
 
-# plot_ccdf_compare(papr_list, f"Original vs ICF vs {title}", labels)
-plot_ccdf_compare(cm_list, f"Original vs ICF vs {title}", labels, metric="CM")
+# plot_ccdf_compare(papr_list, f"Original vs {tech.upper()} vs {title}", labels)
+plot_ccdf_compare(cm_list, f"Original vs {tech.upper()} vs {title}", labels, metric="CM")
 
 # fixme: both percentile and max are not the most efficient solutions
 
@@ -197,38 +198,38 @@ cm_percentile = (1.0 - cm_target_y) * 100.0
 
 # 3. Extract the exact x-axis values (PAPR/CM) where the line cuts the graph
 # (This completely replaces the need for y_axis, np.where, and manual sorting!)
-papr_vlines = [
-    np.percentile(unclipped_papr, papr_percentile),
-    np.percentile(iterations_papr[-1], papr_percentile),
-    np.percentile(pred_papr, papr_percentile)
-]
+# papr_vlines = [
+#     np.percentile(unclipped_papr, papr_percentile),
+#     np.percentile(icf_papr[-1], papr_percentile),
+#     np.percentile(pred_papr, papr_percentile)
+# ]
 
 cm_vlines = [
     np.percentile(unclipped_cm, cm_percentile),
-    np.percentile(iterations_cm[-1], cm_percentile),
+    np.percentile(icf_cm[-1], cm_percentile),
     np.percentile(pred_cm, cm_percentile)
 ]
 
 # cm_vlines = [
 #     np.max(unclipped_cm),
-#     np.max(iterations_cm),
+#     np.max(icf_cm),
 #     np.max(pred_cm)
 # ]
 
 # plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines)
 # plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
 # labels = ["OG", "ICF 1", "ICF 2", "ICF 3"]
-# plot_ccdf_compare([unclipped_papr, *iterations_papr], label=labels, metric="papr")
-# plot_ccdf_compare([unclipped_cm, *iterations_cm], label=labels, metric="cm")
+# plot_ccdf_compare([unclipped_papr, *icf_papr], label=labels, metric="papr")
+# plot_ccdf_compare([unclipped_cm, *icf_cm], label=labels, metric="cm")
 
 end = time.time()
 # ~8s
 print(f"Total execution time: {end - start:.2f} seconds")
-print(f"ICF execution time: {middle - start:.2f} seconds")
-print(f"NNICF execution time: {end - middle:.2f} seconds")
+print(f"{tech.upper()} execution time: {middle - start:.2f} seconds")
+print(f"NN{tech.upper()} execution time: {end - middle:.2f} seconds")
 print()
-print("time taken in the inner iterations loop:", iterations_loop)
-print("time taken in outer samples_per_L loop:", samples_per_L_minus_iterations_loop)
+print("time taken in the inner iterations loop:", icf_time)
+print("time taken in outer samples_per_L loop:", samples_per_L_minus_icf_time)
 
 labels = ['Original', f'Clipped ({iterations} iteration{"s" if iterations > 1 else ""})', f'ICF ({iterations} iteration{"s" if iterations > 1 else ""})', f'NN{tech.upper()} Predicted']
 # plot_signals(signals, labels)
