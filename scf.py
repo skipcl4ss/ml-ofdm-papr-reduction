@@ -91,6 +91,7 @@ samples_per_L_minus_scf_time = 0
 scf_time = 0
 
 x_time, x_clip_scf, x_scf = [], [], []
+rms = None
 
 tx_time, rx_time = [[], []], [[], []]
 for _ in range(samples_per_L):
@@ -113,7 +114,7 @@ for _ in range(samples_per_L):
     samples_per_L_minus_scf_time += t2 - t1
 
     # Process SCF (1 Step replacing the 3 ICF iterations)
-    x_scf, x_clip_scf = scf2(x_time, cr, N, iterations=iterations)
+    x_scf, x_clip_scf, rms = scf2(x_time, cr, N, iterations=iterations)
 
     # Store PAPR of the current iterative result
     # scf_papr.append(calculate_papr(x_scf))
@@ -131,13 +132,12 @@ for _ in range(samples_per_L):
 tx_time = np.array(tx_time, dtype=np.float32)
 rx_time = np.array(rx_time, dtype=np.float32)
 
-# fixme: im using clipped instead of clipped_scf as it raises error when plotting time-domain signal
 signals = {
     'original': x_time,
-    # 'clipped_scf': x_clip_scf,
-    'clipped': x_clip_scf,
+    'clipped_scf': x_clip_scf,
     'scf': x_scf
 }
+A = rms * cr
 
 middle = time.time()
 
@@ -232,8 +232,8 @@ print("time taken in the inner iterations loop:", scf_time)
 print("time taken in outer samples_per_L loop:", samples_per_L_minus_scf_time)
 
 labels = ['Original', 'Clipped (SCF)', f'SCF (Imitating {iterations} iteration{"s" if iterations > 1 else ""})', f'NN{tech.upper()} Predicted']
-# plot_signals(signals, labels)
-plot_signals2(signals, labels)
+# plot_signals(signals, labels, A)
+plot_signals2(signals, labels, A)
 
 signals_re = {}
 signals_im = {}
@@ -242,25 +242,13 @@ signals_ph = {}
 for k, v in signals.items():
     signals_re[k] = v.real
     signals_im[k] = v.imag
-    signals_mag[k] = np.abs(v)
-    signals_ph[k] = np.angle(v)
 labels2 = []
 for l in labels:
     l += " (Real)"
     labels2.append(l)
-plot_signals2(signals_re, labels2)
+plot_signals2(signals_re, labels2, A)
 labels2 = []
 for l in labels:
     l += " (Imaginary)"
     labels2.append(l)
-plot_signals2(signals_im, labels2)
-labels2 = []
-for l in labels:
-    l += " (Magnitude)"
-    labels2.append(l)
-plot_signals2(signals_mag, labels2)
-labels2 = []
-for l in labels:
-    l += " (Phase)"
-    labels2.append(l)
-plot_signals2(signals_ph, labels2)
+plot_signals2(signals_im, labels2, A)

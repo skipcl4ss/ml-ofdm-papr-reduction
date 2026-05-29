@@ -218,14 +218,15 @@ def plot_constellation(symbols, mod, limit, title=None, label=None, color=None):
     plt.legend(loc='lower left', ncol=2)
     plt.show()
 
-def plot_signals(signals, labels, iterations=3):
+# todo: add a parameter for ylimit
+def plot_signals(signals, labels, clip_threshold=None, iterations=3):
     """
     Plot example signals in time domain.
     """
     top = np.max(np.abs(signals['original']))
     right = len(next(iter(signals.values())))
-    # todo: add the calculated clipped value
-    clip_threshold = np.max(np.abs(signals['clipped']))
+    if not clip_threshold:
+        clip_threshold = np.max(np.abs(signals['clipped']))
     l = len(signals)
     x_axis = np.arange(right)
 
@@ -286,12 +287,12 @@ def plot_signals(signals, labels, iterations=3):
     # # plt.tight_layout()
     # plt.show()
 
-# todo: add CR externally, so that clipped signal becomes unneeded
-def plot_signals2(signals, labels, iterations=3):
+# todo: add a parameter for ylimit
+def plot_signals2(signals, labels, clip_threshold=None, iterations=3):
     top = np.max(np.abs(signals['original']))
     right = len(next(iter(signals.values())))
-    # todo: add the calculated clipped value
-    clip_threshold = np.max(np.abs(signals['clipped']))
+    if not clip_threshold:
+        clip_threshold = np.max(np.abs(signals['clipped']))
     l = len(signals)
     x_axis = np.arange(right)
 

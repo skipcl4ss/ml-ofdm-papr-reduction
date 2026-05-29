@@ -91,6 +91,7 @@ samples_per_L_minus_icf_time = 0
 icf_time = 0
 
 x_time, x_clip, x_filt = [], [], []
+rms = None
 
 tx_time, rx_time = [[], []], [[], []]
 for _ in range(samples_per_L):
@@ -115,10 +116,10 @@ for _ in range(samples_per_L):
     # Process C&F
     x_filt = x_time.copy()
     for i in range(iterations):
-        x_filt, x_clip = clip_and_filter_time(x_filt, cr, N)
+        x_filt, x_clip, rms = clip_and_filter_time(x_filt, cr, N)
 
         # Store PAPR of the current iterative result
-        icf_papr[i].append(calculate_papr(x_filt))
+        # icf_papr[i].append(calculate_papr(x_filt))
         icf_cm[i].append(calculate_cm(x_filt))
 
     t3 = time.time()
@@ -138,6 +139,7 @@ signals = {
     'clipped': x_clip,
     'filtered': x_filt
 }
+A = rms * cr
 
 middle = time.time()
 
@@ -232,8 +234,8 @@ print("time taken in the inner iterations loop:", icf_time)
 print("time taken in outer samples_per_L loop:", samples_per_L_minus_icf_time)
 
 labels = ['Original', f'Clipped ({iterations} iteration{"s" if iterations > 1 else ""})', f'ICF ({iterations} iteration{"s" if iterations > 1 else ""})', f'NN{tech.upper()} Predicted']
-# plot_signals(signals, labels)
-plot_signals2(signals, labels)
+# plot_signals(signals, labels, A)
+plot_signals2(signals, labels, A)
 
 signals_re = {}
 signals_im = {}
@@ -242,25 +244,13 @@ signals_ph = {}
 for k, v in signals.items():
     signals_re[k] = v.real
     signals_im[k] = v.imag
-    signals_mag[k] = np.abs(v)
-    signals_ph[k] = np.angle(v)
 labels2 = []
 for l in labels:
     l += " (Real)"
     labels2.append(l)
-plot_signals2(signals_re, labels2)
+plot_signals2(signals_re, labels2, A)
 labels2 = []
 for l in labels:
     l += " (Imaginary)"
     labels2.append(l)
-plot_signals2(signals_im, labels2)
-labels2 = []
-for l in labels:
-    l += " (Magnitude)"
-    labels2.append(l)
-plot_signals2(signals_mag, labels2)
-labels2 = []
-for l in labels:
-    l += " (Phase)"
-    labels2.append(l)
-plot_signals2(signals_ph, labels2)
+plot_signals2(signals_im, labels2, A)

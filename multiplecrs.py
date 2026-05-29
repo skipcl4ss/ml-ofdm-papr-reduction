@@ -47,7 +47,7 @@ for _ in range(samples_per_L):
     samples_per_L_minus_cr_loop += t2 - t1
     # Process C&F
     for cr in clipping_ratios:
-        x_filtered, _ = clip_and_filter_time(x_time, cr, N)
+        x_filtered, _, _ = clip_and_filter_time(x_time, cr, N)
 
         # Store PAPR of the result
         clipped_papr_dict[cr].append(calculate_papr(x_filtered))

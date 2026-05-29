@@ -65,7 +65,7 @@ for i in range(datasize):
         # Process C&F
         x_filt = x_time.copy()
         for j in range(iterations):
-            x_filt, _ = clip_and_filter_time(x_filt, cr, N)
+            x_filt, _, _ = clip_and_filter_time(x_filt, cr, N)
 
         t3 = time.time()
         icf_time += t3 - t2

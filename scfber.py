@@ -1,6 +1,6 @@
 import numpy as np
 from ofdm.modem import get_modem
-from ofdm.candf import oversample_time, clip_and_filter_time, emulate_awgn_channel, scf, scf2
+from ofdm.candf import oversample_time, emulate_awgn_channel, scf, scf2
 from ofdm.metrics import ber_theoretical
 from ofdm.plots import plot_ber, plot_constellation
 import torch
@@ -151,7 +151,7 @@ for EbNo_dB in EbNo_range:
 
         tx_time_oversampled = tx_time_oversampled_base.copy()
         # Process SCF (1 Step replacing the 3 ICF iterations)
-        filtered_time_scf, clipped_time_scf = scf2(tx_time_oversampled, cr, N, iterations=iterations)
+        filtered_time_scf, clipped_time_scf, _ = scf2(tx_time_oversampled, cr, N, iterations=iterations)
 
         rx_symbols_scf_clipped = emulate_awgn_channel(clipped_time_scf, CP, SNR_dB, L)
 

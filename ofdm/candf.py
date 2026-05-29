@@ -62,10 +62,10 @@ def clip_and_filter_time(tx_time_oversampled, CR, N):
       tuple(original_oversampled_time, clipped_time_no_filter, clipped_filtered_time)
     """
     # soft clipping (no filtering)
-    clipped_time, _ = clip_time(tx_time_oversampled, CR)
+    clipped_time, rms = clip_time(tx_time_oversampled, CR)
     clipped_filtered_time, _ = filter_time(clipped_time, N)
 
-    return clipped_filtered_time, clipped_time
+    return clipped_filtered_time, clipped_time, rms
 
 def filter_time(clipped_time, N):
     mid = N // 2
@@ -117,7 +117,7 @@ def scf(tx_time_oversampled, CR, N, iterations=3):
     # 6. Convert the final SCF signal back to the time domain
     x_n_bar = np.fft.ifft(X_k_bar)
 
-    return x_n_bar, clipped_time
+    return x_n_bar, clipped_time, rms
 
 def scf2(tx_time_oversampled, CR, N, iterations=3):
     """
@@ -126,7 +126,7 @@ def scf2(tx_time_oversampled, CR, N, iterations=3):
     This function is extensively simplified compared to scf_time()
     """
     # 1. Soft clip in time domain
-    clipped_time, _ = clip_time(tx_time_oversampled, CR)
+    clipped_time, rms = clip_time(tx_time_oversampled, CR)
 
     # 2. Calculate clipping noise (f_n)
     f_n = tx_time_oversampled - clipped_time
@@ -148,4 +148,4 @@ def scf2(tx_time_oversampled, CR, N, iterations=3):
     # 5. Apply beta to the filtered noise and subtract from the original signal
     x_n_bar = tx_time_oversampled - beta * f_n_filtered
 
-    return x_n_bar, clipped_time
+    return x_n_bar, clipped_time, rms

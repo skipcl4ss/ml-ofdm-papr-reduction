@@ -150,7 +150,7 @@ for EbNo_dB in EbNo_range:
         for i in range(1, iterations + 1):
             # Get clipped signal (no filtering)
             tx_time_oversampled = oversample_time(tx_symbols, N, L)
-            clipped_filtered_time, clipped_time = clip_and_filter_time(tx_time_oversampled, cr, N)
+            clipped_filtered_time, clipped_time, _ = clip_and_filter_time(tx_time_oversampled, cr, N)
             # clipped_time = clip_time(tx_time_oversampled, cr)
 
             # # Downsample back to original rate (take every L-th sample)

@@ -65,7 +65,7 @@ for i in range(datasize):
         samples_per_L_minus_scf_time += t2 - t1
 
         # Process SCF (1 Step replacing the 3 ICF iterations)
-        x_scf, _ = scf2(x_time, cr, N, iterations=iterations)
+        x_scf, _, _ = scf2(x_time, cr, N, iterations=iterations)
 
         t3 = time.time()
         scf_time += t3 - t2
