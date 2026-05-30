@@ -23,6 +23,7 @@ samples_per_L = 10000   # High value to capture the CCDF tail
 cr_dB = 6
 cr = 10 ** (cr_dB / 20)
 iterations = 3
+iterations_str = f"{iterations} iteration{"s" if iterations > 1 else ""}"
 
 # modulation scheme
 mod = "16qam"
@@ -34,8 +35,8 @@ elif mod == "qpsk":
 modulate, _ = get_modem(M)
 
 # clipping technique
-tech = "icf"
-# tech = "scf"
+# tech = "icf"
+tech = "scf"
 
 # Hyperparameters (used only in saving and loading files, not in the actual C&F process)
 lr = 0.001
@@ -83,14 +84,13 @@ NN_Mod_Im.eval()
 
 
 # Simulation
-unclipped_papr, unclipped_cm = [], []
-icf_papr = [[] for _ in range(iterations)]
-icf_cm = [[] for _ in range(iterations)]
+# unclipped_papr, pred_papr, icf_papr = [], [], [[] for _ in range(iterations)]
+unclipped_cm, pred_cm, icf_cm = [], [], [[] for _ in range(iterations)]
 
 samples_per_L_minus_icf_time = 0
 icf_time = 0
 
-x_time, x_clip, x_filt = [], [], []
+x_time, x_clip_icf, x_icf = [], [], []
 rms = None
 
 tx_time, rx_time = [[], []], [[], []]
@@ -114,30 +114,30 @@ for _ in range(samples_per_L):
     samples_per_L_minus_icf_time += t2 - t1
 
     # Process C&F
-    x_filt = x_time.copy()
+    x_icf = x_time.copy()
     for i in range(iterations):
-        x_filt, x_clip, rms = clip_and_filter_time(x_filt, cr, N)
+        x_icf, x_clip_icf, rms = clip_and_filter_time(x_icf, cr, N)
 
         # Store PAPR of the current iterative result
-        # icf_papr[i].append(calculate_papr(x_filt))
-        icf_cm[i].append(calculate_cm(x_filt))
+        # icf_papr[i].append(calculate_papr(x_icf))
+        icf_cm[i].append(calculate_cm(x_icf))
 
     t3 = time.time()
     icf_time += t3 - t2
 
     # store the final iteration's real and imag parts separately
-    rx_time[0].append(np.real(x_filt).astype(np.float32, copy=False))
-    rx_time[1].append(np.imag(x_filt).astype(np.float32, copy=False))
+    rx_time[0].append(np.real(x_icf).astype(np.float32, copy=False))
+    rx_time[1].append(np.imag(x_icf).astype(np.float32, copy=False))
     t4 = time.time()
-    samples_per_L_minus_icf_time += t4 - t1
+    samples_per_L_minus_icf_time += t4 - t3
 
 tx_time = np.array(tx_time, dtype=np.float32)
 rx_time = np.array(rx_time, dtype=np.float32)
 
 signals = {
     'original': x_time,
-    'clipped': x_clip,
-    'filtered': x_filt
+    'clipped icf': x_clip_icf,
+    'icf': x_icf
 }
 A = rms * cr
 
@@ -171,17 +171,16 @@ predicted_complex = pred_denorm_real + 1j * pred_denorm_imag
 signals["predicted"] = predicted_complex[-1]
 
 # 5. Calculate PAPR (Peak-to-Average Power Ratio) for CCDF
-pred_papr, pred_cm = [], []
 for i in range(samples_per_L):
     # pred_papr.append(calculate_papr(predicted_complex[i]))
     pred_cm.append(calculate_cm(predicted_complex[i]))
-pred_papr = np.array(pred_papr)
+# pred_papr = np.array(pred_papr)
 pred_cm = np.array(pred_cm)
 
 # 6. Plot the CCDF
 title = f"NN{tech.upper()} Predicted OFDM\n{params}"
-labels = ['Original', f'ICF ({iterations} iteration{"s" if iterations > 1 else ""})', f'NN{tech.upper()} Predicted']
-papr_list = [unclipped_papr, icf_papr[-1], pred_papr]
+labels = ['Original', f'ICF ({iterations_str})', f'NN{tech.upper()} Predicted']
+# papr_list = [unclipped_papr, icf_papr[-1], pred_papr]
 cm_list = [unclipped_cm, icf_cm[-1], pred_cm]
 
 # plot_ccdf_compare(papr_list, f"Original vs {tech.upper()} vs {title}", labels)
@@ -230,17 +229,15 @@ print(f"Total execution time: {end - start:.2f} seconds")
 print(f"{tech.upper()} execution time: {middle - start:.2f} seconds")
 print(f"NN{tech.upper()} execution time: {end - middle:.2f} seconds")
 print()
-print("time taken in the inner iterations loop:", icf_time)
+print("time taken in the icf calculations:", icf_time)
 print("time taken in outer samples_per_L loop:", samples_per_L_minus_icf_time)
 
-labels = ['Original', f'Clipped ({iterations} iteration{"s" if iterations > 1 else ""})', f'ICF ({iterations} iteration{"s" if iterations > 1 else ""})', f'NN{tech.upper()} Predicted']
+labels = ['Original', f'Clipped ({iterations_str})', f'ICF ({iterations_str})', f'NN{tech.upper()} Predicted']
 # plot_signals(signals, labels, A)
 plot_signals2(signals, labels, A)
 
 signals_re = {}
 signals_im = {}
-signals_mag = {}
-signals_ph = {}
 for k, v in signals.items():
     signals_re[k] = v.real
     signals_im[k] = v.imag

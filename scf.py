@@ -1,6 +1,6 @@
 import numpy as np
 from ofdm.modem import get_modem
-from ofdm.candf import oversample_time, scf, scf2
+from ofdm.candf import oversample_time, scf, scf2, clip_and_filter_time
 from ofdm.metrics import calculate_papr, calculate_cm
 from ofdm.plots import plot_ccdf_compare, plot_ccdf, plot_signals, plot_signals2
 import torch
@@ -8,7 +8,7 @@ from nnscf import NNSCFMapper, normalize, denormalize
 import os
 import time
 
-# todo: clean up ths and other scf files
+# todo: clean up this and other scf files
 # todo: reconsider whether the normalization is correctly implemented here and in other scripts
 
 start = time.time()
@@ -24,6 +24,7 @@ samples_per_L = 10000   # High value to capture the CCDF tail
 cr_dB = 6
 cr = 10 ** (cr_dB / 20)
 iterations = 3
+iterations_str = f"{iterations} iteration{"s" if iterations > 1 else ""}"
 
 # modulation scheme
 mod = "16qam"
@@ -84,13 +85,14 @@ NN_Mod_Im.eval()
 
 
 # Simulation
-unclipped_papr, unclipped_cm = [], []
-scf_papr, scf_cm = [], []
+# unclipped_papr, scf_papr, pred_papr, icf_papr = [], [], [], [[] for _ in range(iterations)]
+unclipped_cm, scf_cm, pred_cm, icf_cm = [], [], [], [[] for _ in range(iterations)]
 
-samples_per_L_minus_scf_time = 0
+samples_per_L_minus_scf_icf_time = 0
 scf_time = 0
+icf_time = 0
 
-x_time, x_clip_scf, x_scf = [], [], []
+x_time, x_clip_scf, x_scf, x_clip_icf, x_icf = [], [], [], [], []
 rms = None
 
 tx_time, rx_time = [[], []], [[], []]
@@ -111,7 +113,7 @@ for _ in range(samples_per_L):
     unclipped_cm.append(calculate_cm(x_time))
 
     t2 = time.time()
-    samples_per_L_minus_scf_time += t2 - t1
+    samples_per_L_minus_scf_icf_time += t2 - t1
 
     # Process SCF (1 Step replacing the 3 ICF iterations)
     x_scf, x_clip_scf, rms = scf2(x_time, cr, N, iterations=iterations)
@@ -123,19 +125,34 @@ for _ in range(samples_per_L):
     t3 = time.time()
     scf_time += t3 - t2
 
+    # Process C&F
+    x_icf = x_time.copy()
+    for i in range(iterations):
+        # ! RMS was already calculated during SCF
+        x_icf, x_clip_icf, _ = clip_and_filter_time(x_icf, cr, N)
+
+        # Store PAPR of the current iterative result
+        # icf_papr[i].append(calculate_papr(x_icf))
+        icf_cm[i].append(calculate_cm(x_icf))
+
+    t4 = time.time()
+    icf_time += t4 - t3
+
     # store the final iteration's real and imag parts separately
     rx_time[0].append(np.real(x_scf).astype(np.float32, copy=False))
     rx_time[1].append(np.imag(x_scf).astype(np.float32, copy=False))
-    t4 = time.time()
-    samples_per_L_minus_scf_time += t4 - t1
+    t5 = time.time()
+    samples_per_L_minus_scf_icf_time += t5 - t4
 
 tx_time = np.array(tx_time, dtype=np.float32)
 rx_time = np.array(rx_time, dtype=np.float32)
 
 signals = {
     'original': x_time,
-    'clipped_scf': x_clip_scf,
-    'scf': x_scf
+    'clipped scf': x_clip_scf,
+    'scf': x_scf,
+    'clipped icf': x_clip_icf,
+    'icf': x_icf
 }
 A = rms * cr
 
@@ -169,21 +186,20 @@ predicted_complex = pred_denorm_real + 1j * pred_denorm_imag
 signals["predicted"] = predicted_complex[-1]
 
 # 5. Calculate PAPR (Peak-to-Average Power Ratio) for CCDF
-pred_papr, pred_cm = [], []
 for i in range(samples_per_L):
     # pred_papr.append(calculate_papr(predicted_complex[i]))
     pred_cm.append(calculate_cm(predicted_complex[i]))
-pred_papr = np.array(pred_papr)
+# pred_papr = np.array(pred_papr)
 pred_cm = np.array(pred_cm)
 
 # 6. Plot the CCDF
 title = f"NN{tech.upper()} Predicted OFDM\n{params}"
-labels = ['Original', f'SCF (imitating {iterations} iteration{"s" if iterations > 1 else ""})', f'NN{tech.upper()} Predicted']
-papr_list = [unclipped_papr, scf_papr, pred_papr]
-cm_list = [unclipped_cm, scf_cm, pred_cm]
+labels = ['Original', f'SCF ({iterations_str})', f'ICF ({iterations_str})', f'NN{tech.upper()} Predicted']
+# papr_list = [unclipped_papr, scf_papr, icf_papr[-1], pred_papr]
+cm_list = [unclipped_cm, scf_cm, icf_cm[-1], pred_cm]
 
-# plot_ccdf_compare(papr_list, f"Original vs {tech.upper()} vs {title}", labels)
-plot_ccdf_compare(cm_list, f"Original vs {tech.upper()} vs {title}", labels, metric="CM")
+# plot_ccdf_compare(papr_list, f"Original vs SCF vs ICF vs {title}", labels)
+plot_ccdf_compare(cm_list, f"Original vs SCF vs ICF vs {title}", labels, metric="CM")
 
 # fixme: both percentile and max are not the most efficient solutions
 
@@ -201,12 +217,14 @@ cm_percentile = (1.0 - cm_target_y) * 100.0
 # papr_vlines = [
 #     np.percentile(unclipped_papr, papr_percentile),
 #     np.percentile(scf_papr, papr_percentile),
+#     np.percentile(icf_papr[-1], papr_percentile),
 #     np.percentile(pred_papr, papr_percentile)
 # ]
 
 cm_vlines = [
     np.percentile(unclipped_cm, cm_percentile),
     np.percentile(scf_cm, cm_percentile),
+    np.percentile(icf_cm[-1], cm_percentile),
     np.percentile(pred_cm, cm_percentile)
 ]
 
@@ -228,17 +246,16 @@ print(f"Total execution time: {end - start:.2f} seconds")
 print(f"{tech.upper()} execution time: {middle - start:.2f} seconds")
 print(f"NN{tech.upper()} execution time: {end - middle:.2f} seconds")
 print()
-print("time taken in the inner iterations loop:", scf_time)
-print("time taken in outer samples_per_L loop:", samples_per_L_minus_scf_time)
+print("time taken in the scf calculations:", scf_time)
+print("time taken in the icf calculations:", icf_time)
+print("time taken in outer samples_per_L loop:", samples_per_L_minus_scf_icf_time)
 
-labels = ['Original', 'Clipped (SCF)', f'SCF (Imitating {iterations} iteration{"s" if iterations > 1 else ""})', f'NN{tech.upper()} Predicted']
+labels = ['Original', 'Clipped (SCF)', f'SCF ({iterations_str})', f'Clipped ({iterations_str})', f'ICF ({iterations_str})', f'NN{tech.upper()} Predicted']
 # plot_signals(signals, labels, A)
 plot_signals2(signals, labels, A)
 
 signals_re = {}
 signals_im = {}
-signals_mag = {}
-signals_ph = {}
 for k, v in signals.items():
     signals_re[k] = v.real
     signals_im[k] = v.imag

@@ -170,7 +170,7 @@ def plot_ber(EbNo_range, val_list, title=None, label=None, M=4, save=False):
         name = label[i].lower()
         if any(k in name for k in ("nn", "neural", "predicted", "proposed")):
             plt.semilogy(EbNo_range, vals, color="g", linewidth=2, marker="D", label=label[i])
-        elif any(k in name for k in ("original", "unclipped")):
+        elif any(k in name for k in ("no clip", "unclipped")):
             plt.semilogy(EbNo_range, vals, color="k", linewidth=2, marker="s", label=label[i])
         elif any(k in name for k in ("filtered", "icf")):
             plt.semilogy(EbNo_range, vals, color="r", linewidth=2, marker="o", label=label[i])

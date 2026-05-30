@@ -1,6 +1,7 @@
 import numpy as np
 from ofdm.modem import get_modem
 from ofdm.candf import oversample_time, clip_and_filter_time
+from ofdm.plots import plot_dataset_mapping
 import torch
 from nnscf import normalize
 import os
@@ -33,7 +34,9 @@ modulate, _ = get_modem(M)
 datasize = 100
 # datasize = 120
 
-# todo: see a way to add ber to the nnscf data so that we can use it in the loss function
+params = f"ICF {mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)"
+
+# todo: see a way to add ber to the nnicf data so that we can use it in the loss function
 
 pt_dir = "./pt_dir/"
 os.makedirs(pt_dir, exist_ok=True)
@@ -74,7 +77,7 @@ for i in range(datasize):
         rx_time[0].append(np.real(x_filt).astype(np.float32, copy=False))
         rx_time[1].append(np.imag(x_filt).astype(np.float32, copy=False))
         t4 = time.time()
-        samples_per_L_minus_icf_time += t4 - t1
+        samples_per_L_minus_icf_time += t4 - t3
     t5 = time.time()
 
     tx_time = np.array(tx_time, dtype=np.float32)
@@ -114,10 +117,15 @@ for i in range(datasize):
     t6 = time.time()
     datasize_minus_samples_per_L_loop += t6 - t5
 
+title = f"Data Mapping\n{params}"
+plot_dataset_mapping(os.path.join(pt_dir, f"{mod}_icf_part_{0:03d}_real.pt"), "NNICF Real " + title)
+plot_dataset_mapping(os.path.join(pt_dir, f"{mod}_icf_part_{0:03d}_imag.pt"), "NNICF Imaginary " + title)
+
 end = time.time()
 # ~(480 - 830)s
 print(f'\nTotal execution time: {int((end - start) // 60)}:{(end - start) % 60:.1f} minutes')
 print()
-print(f"time taken in the inner iterations loop: {int(icf_time // 60)}:{icf_time % 60:.1f} minutes")
+print(f"time taken in the icf calculations: {int(icf_time // 60)}:{icf_time % 60:.1f} minutes")
 print(f"time taken in middle samples_per_L loop: {int(samples_per_L_minus_icf_time // 60)}:{samples_per_L_minus_icf_time % 60:.1f} minutes")
-print(f"time taken in outer {datasize} iterations loop: {int(datasize_minus_samples_per_L_loop // 60)}:{datasize_minus_samples_per_L_loop % 60:.1f} minutes")
+print(f"time taken in outer datasize loop: {int(datasize_minus_samples_per_L_loop // 60)}:{datasize_minus_samples_per_L_loop % 60:.1f} minutes")
+print(f"time taken in plotting: {end - t6:.2f} seconds")
