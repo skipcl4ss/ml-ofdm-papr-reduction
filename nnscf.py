@@ -13,25 +13,17 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # todo: see how can i use loss function to reduce ber
 criterion = nn.MSELoss()
 
-# ! instead of returning only real or imag part of two datasets (tx and rx), returns only one part of one dataset
-# todo merge it with renormalization notebook
-def normalize(X_raw):
-    X_batch = torch.tensor(X_raw, dtype=torch.float32)
+# ! instead of returning only two parts (real and imag) of two datasets (tx and rx), returns only one part of one dataset
+#%%
+def normalize(raw, limits):
+    min, max = limits
+    norm = 2.0 * ((raw - min) / (max - min)) - 1.0 if max != min else raw
+    return norm
 
-    # Convert PyTorch 0-D tensors to standard Python floats
-    X_min, X_max = X_batch.min().item(), X_batch.max().item()
-
-    X_norm = 2.0 * ((X_batch - X_min) / (X_max - X_min)) - 1.0 if X_max != X_min else X_batch
-
-    # 3. Return as a hyper-fast PyTorch file
-    return X_norm, (X_min, X_max)
-
-# ! should be used on real and imag of each entry in the dataset separately
-# ! to normalize the whole dataset using global values, run renormalization.ipynb after this function
-def denormalize(pred_norm, minmax):
-    raw_min, raw_max = minmax
-    pred_raw = ((pred_norm + 1.0) / 2.0) * (raw_max - raw_min) + raw_min if raw_max != raw_min else pred_norm
-    return pred_raw
+def denormalize(norm, limits):
+    min, max = limits
+    raw = ((norm + 1.0) / 2.0) * (max - min) + min if max != min else norm
+    return raw
 
 class TriangularActivation(nn.Module):
     """

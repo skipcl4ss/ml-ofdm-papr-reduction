@@ -8,8 +8,6 @@ from nnscf import NNSCFMapper, normalize, denormalize
 import os
 import time
 
-# todo: reconsider whether the normalization is correctly implemented here and in other scripts
-
 start = time.time()
 
 # Parameters
@@ -24,7 +22,7 @@ cr = 10 ** (cr_dB / 20)
 iterations = 3
 iterations_str = f"{iterations} iteration{"s" if iterations > 1 else ""}"
 
-# modulation scheme
+# Modulation scheme
 mod = "16qam"
 # mod = "qpsk"
 # edits the stops to be same as the paper, and declares M for the modem
@@ -36,22 +34,25 @@ elif mod == "qpsk":
     stop = 8
 modulate, demodulate = get_modem(M)
 
-# clipping technique
+# Clipping technique
 # tech = "icf"
 tech = "scf"
 
 # Hyperparameters (used only in saving and loading files, not in the actual C&F process)
-lr = 0.001
-# lr = 0.01
-lr_str = "dot" + str(lr).split(".")[1]
+# lr = 0.001
+lr = 0.1
+lr_list = str(float(lr)).split(".")
+lr_str = f"dot{lr_list[1]}" if lr < 1 else f"{lr_list[0]}dot{lr_list[1]}"
+
+# Optimizer
+# opt = "Adam"
+opt = "LBFGS"
 
 # Data splitting (used only in saving and loading files, not in the actual C&F process)
-datasize = 100
-# datasize = 120
+data_size = 100
 train_size = 70
-# val_size = 20
 val_size = 10
-test_size = datasize - train_size - val_size
+test_size = data_size - train_size - val_size
 if test_size:
     one_batch = None
 else:
@@ -59,30 +60,47 @@ else:
     one_batch = "00"
 train_val_test_str = f"{train_size}_{val_size}_{test_size}" if val_size else f"{train_size}_{test_size}"
 
-# Optimizer
-opt = "Adam"
-# opt = "LBFGS"
-
 params = f"{opt} optimizer {tech.upper()} {mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)\nlr = {lr} ({train_size} Training/{val_size} Validation/{test_size} Testing)"
 
-# model_dir = "./trained_models/"
-model_dir = "./new architecture/"
+relev = "./relevant files/"
+os.makedirs(relev, exist_ok=True)
 
 # * Load nnscf model
 
 # 2. Load the trained models
 # Check for GPU availability and set device accordingly
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+checkpoint_re = torch.load(
+    os.path.join(relev, f"{opt}_{mod}_{tech}_weights_limits_re_{train_val_test_str}_{lr_str}.pth"),
+    weights_only=False
+)
+checkpoint_im = torch.load(
+    os.path.join(relev, f"{opt}_{mod}_{tech}_weights_limits_im_{train_val_test_str}_{lr_str}.pth"),
+    weights_only=False
+)
+
 # Instantiate the empty models
 NN_Mod_Re = NNSCFMapper().to(device)
 NN_Mod_Im = NNSCFMapper().to(device)
 
 # Inject the trained weights
-NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
-NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+NN_Mod_Re.load_state_dict(checkpoint_re['model_state_dict'])
+NN_Mod_Im.load_state_dict(checkpoint_im['model_state_dict'])
 
 NN_Mod_Re.eval()
 NN_Mod_Im.eval()
+
+# 2. Grab the saved normalization limits
+X_r_min = checkpoint_re['X_min']
+X_r_max = checkpoint_re['X_max']
+Y_r_min = checkpoint_re['Y_min']
+Y_r_max = checkpoint_re['Y_max']
+
+X_i_min = checkpoint_im['X_min']
+X_i_max = checkpoint_im['X_max']
+Y_i_min = checkpoint_im['Y_min']
+Y_i_max = checkpoint_im['Y_max']
 
 # ber_theory_list = []
 BER_results = {
@@ -100,11 +118,12 @@ num_symb_minus_icf_nn_time = 0
 icf_time = 0
 nn_time = 0
 
-# todo: try to understand whether to downsample before awgn or not
+constel_image_path = os.path.join(relev, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_")
 
 EbNo_range = np.arange(0, stop + 1, 1) # does not affect ccdf
 bits_per_symbol = int(np.log2(M))
 num_symb = 100
+
 
 tx_ofdm_no_clip = None
 rx_symbols_no_clip = None
@@ -140,17 +159,15 @@ for EbNo_dB in EbNo_range:
 
         if EbNo_dB == EbNo_range[0] and not plotted:
             limit = np.max(np.abs(tx_symbols)) * 1.1
-            plot_constellation(tx_symbols, mod, limit, title=f'Transmitted Constellation at E$_b$/N$_0$ = {EbNo_dB}dB', label='Tx Symbols', color='black')
+            plot_constellation(tx_symbols, mod, limit, title=f'Transmitted Constellation at E$_b$/N$_0$ = {EbNo_dB}dB', label='Tx Symbols', color='black', save=(constel_image_path+"Tx.png"))
 
         # No clipping case
         tx_ofdm_no_clip = np.fft.ifft(tx_symbols)
 
-        # ? how does it differ
         rx_symbols_no_clip = emulate_awgn_channel(tx_ofdm_no_clip, CP, SNR_dB)
-        # rx_symbols_no_clip = emulate_awgn_channel(tx_ofdm_no_clip, CP, SNR_dB, L)
 
         if (EbNo_dB == EbNo_range[0] or EbNo_dB == EbNo_range[-1]) and not plotted:
-            plot_constellation(rx_symbols_no_clip, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (No Clip)', label='Rx Symbols (No Clip)', color='black')
+            plot_constellation(rx_symbols_no_clip, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (No Clip)', label='Rx Symbols (No Clip)', color='black', save=(constel_image_path+f"Rx_no_clip_{EbNo_dB}db.png"))
 
         rx_bits_no_clip = demodulate(rx_symbols_no_clip, bits=True)
 
@@ -168,16 +185,12 @@ for EbNo_dB in EbNo_range:
         for i in range(1, iterations + 1):
             filtered_time_icf, clipped_time_icf, _ = clip_and_filter_time(filtered_time_icf, cr, N)
 
-            # ? how does it differ
-            # rx_symbols_clipped_icf = emulate_awgn_channel(clipped_time_icf, CP, SNR_dB)
             rx_symbols_clipped_icf = emulate_awgn_channel(clipped_time_icf, CP, SNR_dB, L)
 
             rx_bits_clipped_icf = demodulate(rx_symbols_clipped_icf, bits=True)
 
             bit_error_clipped_icf[i] += np.sum(tx_bits != rx_bits_clipped_icf)
 
-            # ? how does it differ
-            # rx_symbols_icf = emulate_awgn_channel(filtered_time_icf, CP, SNR_dB)
             rx_symbols_icf = emulate_awgn_channel(filtered_time_icf, CP, SNR_dB, L)
 
             rx_bits_icf = demodulate(rx_symbols_icf, bits=True)
@@ -185,11 +198,11 @@ for EbNo_dB in EbNo_range:
             bit_error_icf[i] += np.sum(tx_bits != rx_bits_icf)
 
             # if (EbNo_dB == EbNo_range[0] or EbNo_dB == EbNo_range[-1]) and not plotted:
-            #     plot_constellation(rx_symbols_clipped_icf, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Clipped)', label='Rx Symbols (Clipped)', color='magenta')
-            #     plot_constellation(rx_symbols_icf, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Filtered)', label='Rx Symbols (Filtered)', color='red')
+            #     plot_constellation(rx_symbols_clipped_icf, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Clipped)', label='Rx Symbols (Clipped)', color='magenta', save=(constel_image_path+f"Rx_clipped_icf_{EbNo_dB}db.png"))
+            #     plot_constellation(rx_symbols_icf, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Filtered)', label='Rx Symbols (Filtered)', color='red', , save=(constel_image_path+f"Rx_icf_{EbNo_dB}db.png"))
 
         if (EbNo_dB == EbNo_range[0] or EbNo_dB == EbNo_range[-1]) and not plotted:
-            plot_constellation(rx_symbols_icf, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Filtered)', label='Rx Symbols (Filtered)', color='red')
+            plot_constellation(rx_symbols_icf, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Filtered)', label='Rx Symbols (Filtered)', color='red', save=(constel_image_path+f"Rx_icf_{EbNo_dB}db.png"))
 
         t5 = time.time()
         icf_time += t5 - t4
@@ -198,8 +211,8 @@ for EbNo_dB in EbNo_range:
 
         # 1. Normalize the data and turn it to torch tensors
         # ? why tx_time_oversampled
-        tx_real, minmax_real = normalize(tx_time_oversampled.real)
-        tx_imag, minmax_imag = normalize(tx_time_oversampled.imag)
+        tx_real = normalize(tx_time_oversampled.real, (X_r_min, X_r_max))
+        tx_imag = normalize(tx_time_oversampled.imag, (X_i_min, X_i_max))
 
         # 2. Generate Predictions
         with torch.no_grad():
@@ -211,26 +224,15 @@ for EbNo_dB in EbNo_range:
             predicted_real = NN_Mod_Re(X_real_flat).view_as(tx_real).cpu().numpy()
             predicted_imag = NN_Mod_Im(X_imag_flat).view_as(tx_imag).cpu().numpy()
 
-            # # Pass the original input straight through
-            # predicted_real = tx_real_tensor.squeeze(0).cpu().numpy().flatten()
-            # predicted_imag = tx_imag_tensor.squeeze(0).cpu().numpy().flatten()
-            # # plt.plot(tx_real_tensor.squeeze().cpu().numpy(), label="Original Input (Normalized)")
-            # # plt.plot(predicted_real, label="NN Output (Flatlined)")
-            # # plt.legend()
-            # # plt.show()
-            # # exit()
-
-        pred_denorm_real = denormalize(predicted_real, minmax_real)
-        pred_denorm_imag = denormalize(predicted_imag, minmax_imag)
+        pred_denorm_real = denormalize(predicted_real, (Y_r_min, Y_r_max))
+        pred_denorm_imag = denormalize(predicted_imag, (Y_i_min, Y_i_max))
 
         predicted_complex = pred_denorm_real + 1j * pred_denorm_imag
 
-        # ? how does it differ
-        # predicted_symbols = emulate_awgn_channel(predicted_complex, CP, SNR_dB)
         predicted_symbols = emulate_awgn_channel(predicted_complex, CP, SNR_dB, L)
 
         if (EbNo_dB == EbNo_range[0] or EbNo_dB == EbNo_range[-1]) and not plotted:
-            plot_constellation(predicted_symbols, mod, limit, title=f'Predicted Constellation at E$_b$/N$_0$ = {EbNo_dB}dB', label='Rx Symbols (Predicted)', color='green')
+            plot_constellation(predicted_symbols, mod, limit, title=f'Predicted Constellation at E$_b$/N$_0$ = {EbNo_dB}dB', label='Rx Symbols (Predicted)', color='green', save=(constel_image_path+f"Rx_pred_{EbNo_dB}db.png"))
         plotted = True
 
         predicted_bits = demodulate(predicted_symbols, bits=True)
@@ -251,9 +253,9 @@ for EbNo_dB in EbNo_range:
     BER_results['predicted'].append(ber_predicted)
 
     for i in range(1, iterations + 1):
-        ber_clipped = bit_error_clipped_icf[i] / total_bits
+        ber_clipped_icf = bit_error_clipped_icf[i] / total_bits
         ber_icf = bit_error_icf[i] / total_bits
-        BER_results[f'clipped icf ({f"{i} iteration{"s" if i > 1 else ""}"})'].append(ber_clipped)
+        BER_results[f'clipped icf ({f"{i} iteration{"s" if i > 1 else ""}"})'].append(ber_clipped_icf)
         BER_results[f'icf ({f"{i} iteration{"s" if i > 1 else ""}"})'].append(ber_icf)
     # ber_theory_list.append(ber_theory)
 
