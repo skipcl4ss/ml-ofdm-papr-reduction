@@ -32,7 +32,7 @@ elif mod == "qpsk":
     M = 4
 modulate, _ = get_modem(M)
 
-# the actual size of the dataset
+# Number of entries in the dataset
 data_size = 100
 
 params = f"SCF {mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)"
@@ -134,7 +134,7 @@ data_size_minus_samples_per_L_loop += t7 - t6
 real_path = f"{mod}_scf_part_{0:02d}_real"
 imag_path = f"{mod}_scf_part_{0:02d}_imag"
 plot_dataset_mapping(os.path.join(raw_dir, real_path + ".pt"), f"NNSCF Real\n{params} Batch #{0:02d}", raw=True, save=os.path.join(relev, real_path + ".png"))
-plot_dataset_mapping(os.path.join(raw_dir, imag_path + ".pt"), f"NNSCF Imaginary\n{params} Batch #{0:02d}", raw=True, save=os.path.join(relev, real_path + ".png"))
+plot_dataset_mapping(os.path.join(raw_dir, imag_path + ".pt"), f"NNSCF Imaginary\n{params} Batch #{0:02d}", raw=True, save=os.path.join(relev, imag_path + ".png"))
 
 # x = torch.load(os.path.join(raw_dir, real_path + ".pt"), weights_only=True)
 # X = normalize(x['X_raw'], (min(raw_limits['X_r_min']), max(raw_limits['X_r_max'])))
@@ -146,11 +146,17 @@ plot_dataset_mapping(os.path.join(raw_dir, imag_path + ".pt"), f"NNSCF Imaginary
 # plot_dataset_mapping(os.path.join(relev, "test.pt"), f"NNSCF Real\n{params}")
 
 end = time.time()
-# ~4:33.3 min
-print(f'\nTotal execution time: {int((end - start) // 60)}:{(end - start) % 60:.2f} minutes')
+print(f'\nTotal execution time: {int((end - start) // 60)}:{(end - start) % 60:05.2f} minutes')
 print()
-print(f"time taken in the scf calculations: {int(scf_time // 60)}:{scf_time % 60:.2f} minutes")
-print(f"time taken in middle samples_per_L loop: {int(samples_per_L_minus_scf_time // 60)}:{samples_per_L_minus_scf_time % 60:.2f} minutes")
-print(f"time taken in outer data_size loop: {int(data_size_minus_samples_per_L_loop // 60)}:{data_size_minus_samples_per_L_loop % 60:.2f} minutes")
-print(f"time taken in plotting: {end - t7:.2f} seconds")
-# print(f"time taken in plotting: {end - t6:.2f} seconds")
+print(f"time taken in the scf calculations: {int(scf_time // 60)}:{scf_time % 60:05.2f} minutes")
+print(f"time taken in middle samples_per_L loop: {int(samples_per_L_minus_scf_time // 60)}:{samples_per_L_minus_scf_time % 60:05.2f} minutes")
+print(f"time taken in outer data_size loop: {int(data_size_minus_samples_per_L_loop // 60)}:{data_size_minus_samples_per_L_loop % 60:05.2f} minutes")
+print(f"time taken in plotting:  {int((end - t7) // 60)}:{(end - t7) % 60:05.2f} minutes")
+# print(f"time taken in plotting:  {int((end - t6) // 60)}:{(end - t6) % 60:05.2f} minutes")
+#
+# # Total execution time: 5:25.12 minutes
+# #
+# # time taken in the scf calculations: 2:30.16 minutes
+# # time taken in middle samples_per_L loop: 1:14.55 minutes
+# # time taken in outer data_size loop: 0:38.05 minutes
+# # time taken in plotting:  1:01.93 minutes

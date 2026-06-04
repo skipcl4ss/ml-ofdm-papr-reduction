@@ -32,7 +32,7 @@ elif mod == "qpsk":
     M = 4
 modulate, _ = get_modem(M)
 
-# the actual size of the dataset
+# Number of entries in the dataset
 data_size = 100
 
 params = f"ICF {mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)"
@@ -133,10 +133,10 @@ torch.save(raw_limits, os.path.join(relev, f"{mod}_icf_{data_size}_raw_limits.pt
 t7 = time.time()
 data_size_minus_samples_per_L_loop += t7 - t6
 
-real_path = f"{mod}_icf_part_{0:02d}_real"
-imag_path = f"{mod}_icf_part_{0:02d}_imag"
-plot_dataset_mapping(os.path.join(raw_dir, real_path + ".pt"), f"NNICF Real\n{params} Batch #{0:02d}", raw=True, save=os.path.join(relev, real_path + ".png"))
-plot_dataset_mapping(os.path.join(raw_dir, imag_path + ".pt"), f"NNICF Imaginary\n{params} Batch #{0:02d}", raw=True, save=os.path.join(relev, real_path + ".png"))
+# real_path = f"{mod}_icf_part_{0:02d}_real"
+# imag_path = f"{mod}_icf_part_{0:02d}_imag"
+# plot_dataset_mapping(os.path.join(raw_dir, real_path + ".pt"), f"NNICF Real\n{params} Batch #{0:02d}", raw=True, save=os.path.join(relev, real_path + ".png"))
+# plot_dataset_mapping(os.path.join(raw_dir, imag_path + ".pt"), f"NNICF Imaginary\n{params} Batch #{0:02d}", raw=True, save=os.path.join(relev, imag_path + ".png"))
 
 # x = torch.load(os.path.join(raw_dir, real_path + ".pt"), weights_only=True)
 # X = normalize(x['X_raw'], (min(raw_limits['X_r_min']), max(raw_limits['X_r_max'])))
@@ -148,11 +148,11 @@ plot_dataset_mapping(os.path.join(raw_dir, imag_path + ".pt"), f"NNICF Imaginary
 # plot_dataset_mapping(os.path.join(relev, "test.pt"), f"NNICF Real\n{params}")
 
 end = time.time()
-# ~(480 - 830)s
-print(f'\nTotal execution time: {int((end - start) // 60)}:{(end - start) % 60:.2f} minutes')
+# ~s
+print(f'\nTotal execution time: {int((end - start) // 60)}:{(end - start) % 60:05.2f} minutes')
 print()
-print(f"time taken in the icf calculations: {int(icf_time // 60)}:{icf_time % 60:.2f} minutes")
-print(f"time taken in middle samples_per_L loop: {int(samples_per_L_minus_icf_time // 60)}:{samples_per_L_minus_icf_time % 60:.2f} minutes")
-print(f"time taken in outer data_size loop: {int(data_size_minus_samples_per_L_loop // 60)}:{data_size_minus_samples_per_L_loop % 60:.2f} minutes")
-print(f"time taken in plotting: {end - t7:.2f} seconds")
-# print(f"time taken in plotting: {end - t6:.2f} seconds")
+print(f"time taken in the icf calculations: {int(icf_time // 60)}:{icf_time % 60:05.2f} minutes")
+print(f"time taken in middle samples_per_L loop: {int(samples_per_L_minus_icf_time // 60)}:{samples_per_L_minus_icf_time % 60:05.2f} minutes")
+print(f"time taken in outer data_size loop: {int(data_size_minus_samples_per_L_loop // 60)}:{data_size_minus_samples_per_L_loop % 60:05.2f} minutes")
+print(f"time taken in plotting:  {int((end - t7) // 60)}:{(end - t7) % 60:05.2f} minutes")
+# print(f"time taken in plotting:  {int((end - t6) // 60)}:{(end - t6) % 60:05.2f} minutes")

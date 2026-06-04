@@ -166,6 +166,8 @@ middle = time.time()
 tx_real = normalize(tx_time[0], (X_r_min, X_r_max))
 tx_imag = normalize(tx_time[1], (X_i_min, X_i_max))
 
+tx_real = torch.tensor(tx_time[0], dtype=torch.float32)
+tx_imag = torch.tensor(tx_time[1], dtype=torch.float32)
 
 # 3. Generate Predictions (No gradients needed for testing)
 with torch.no_grad():
@@ -235,7 +237,7 @@ cm_vlines = [
 # ]
 
 # plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines)
-# plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
+plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
 # labels = ["OG", "ICF 1", "ICF 2", "ICF 3"]
 # plot_ccdf_compare([unclipped_papr, *icf_papr], label=labels, metric="papr")
 # plot_ccdf_compare([unclipped_cm, *icf_cm], label=labels, metric="cm")

@@ -33,57 +33,7 @@ print(f"Using {tech} clipping technique")
 epochs = 100
 # using 0.001 for Adam and 0.01 for LBFGS as default values
 # lr = 0.001
-lr = 0.1
-lr_list = str(float(lr)).split(".")
-lr_str = f"dot{lr_list[1]}" if lr < 1 else f"{lr_list[0]}dot{lr_list[1]}"
-print(f"Hyperparameters: epochs = {epochs}, learning rate = {lr} ({lr_str} used in naming files), batch size = None (for now)")
-
-# Optimizer
-# opt = "Adam"
-opt = "LBFGS"
-print(f"Using {opt} optimizer")
-
-# Data splitting
-# ! make sure that the splitting is the same as in renormalization.ipynb
-data_size = 100
-train_size = 70
-val_size = 10
-test_size = data_size - train_size - val_size
-if test_size:
-    one_batch = None
-else:
-    test_size = 1
-    one_batch = "00"
-train_val_test_str = f"{train_size}_{val_size}_{test_size}" if val_size else f"{train_size}_{test_size}"
-print(f"dataset of size {data_size} is split into {train_size} training files, and {val_size} validation and {test_size} testing batches respectively ({train_val_test_str} used in naming files)")
-
-batch_suffix = ""
-if one_batch:
-    batch_suffix = f"Batch #{one_batch}"
-    print(f"This one batch is of index {one_batch}")
-    if train_size + val_size == data_size:
-        print(batch_suffix, "was already used in training")
-
-params = f"{opt} optimizer {tech.upper()} {mod.upper()} lr = {lr}\n({train_size} Training/{val_size} Validation/{test_size} Testing){" (" + batch_suffix + ")" if batch_suffix else ''}"
-print(params)
-
-samples_per_L = 10000
-
-# Modulation scheme
-mod = "16qam"
-# mod = "qpsk"
-print(f"Using {mod.upper()} modulation technique")
-
-# clipping technique
-# tech = "icf"
-tech = "scf"
-print(f"Using {tech} clipping technique")
-
-# Hyperparameters
-epochs = 100
-# using 0.001 for Adam and 0.01 for LBFGS as default values
-# lr = 0.001
-lr = 0.1
+lr = 0.05
 lr_list = str(float(lr)).split(".")
 lr_str = f"dot{lr_list[1]}" if lr < 1 else f"{lr_list[0]}dot{lr_list[1]}"
 print(f"Hyperparameters: epochs = {epochs}, learning rate = {lr} ({lr_str} used in naming files), batch size = None (for now)")
@@ -145,9 +95,7 @@ class FastOFDMDataset(Dataset):
         data_pkg = torch.load(file_path, weights_only=False)
 
         # Return the tensors AND the scaling limits
-        return (data_pkg['X_norm'], data_pkg['Y_norm'],
-                data_pkg['X_min'], data_pkg['X_max'],
-                data_pkg['Y_min'], data_pkg['Y_max'])
+        return (data_pkg['X_norm'], data_pkg['Y_norm'])
 
 # -----------------------------------------------------------------------------
 cell6 = time.time()
@@ -160,11 +108,11 @@ cell10 = time.time()
 
 # ! this part is actually unnecessary in the notebook as the checkpoints are already loaded
 checkpoint_re = torch.load(
-    os.path.join(relev, f"{opt}_{mod}_{tech}_weights_limits_re_{train_val_test_str}_{lr_str}.pth"),
+    os.path.join(relev, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_weights_limits_re.pth"),
     weights_only=False
 )
 checkpoint_im = torch.load(
-    os.path.join(relev, f"{opt}_{mod}_{tech}_weights_limits_im_{train_val_test_str}_{lr_str}.pth"),
+    os.path.join(relev, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_weights_limits_im.pth"),
     weights_only=False
 )
 
@@ -234,7 +182,7 @@ else:
     test_loss_real = 0.0
     test_loss_imag = 0.0
     with torch.no_grad():
-        for (X_real, Y_real, _, _, _, _), (X_imag, Y_imag, _, _, _, _) in zip(test_loader_real, test_loader_imag):
+        for (X_real, Y_real), (X_imag, Y_imag) in zip(test_loader_real, test_loader_imag):
             # Move inputs to device
             X_real, X_imag = X_real.to(device), X_imag.to(device)
 
@@ -290,49 +238,46 @@ else:
 cell11 = time.time()
 
 # 5. Calculate PAPR and CM for CCDF
-# orig_papr, clip_papr, pred_papr = [], [], []
+orig_papr, clip_papr, pred_papr = [], [], []
 orig_cm, clip_cm, pred_cm = [], [], []
 
 # Iterate through the arrays
 for i in range(test_size * samples_per_L if not one_batch else samples_per_L):
-    # orig_papr.append(calculate_papr(original_complex[i]))
-    # clip_papr.append(calculate_papr(clipped_complex[i]))
-    # pred_papr.append(calculate_papr(predicted_complex[i]))
+    orig_papr.append(calculate_papr(original_complex[i]))
+    clip_papr.append(calculate_papr(clipped_complex[i]))
+    pred_papr.append(calculate_papr(predicted_complex[i]))
 
     orig_cm.append(calculate_cm(original_complex[i]))
     clip_cm.append(calculate_cm(clipped_complex[i]))
     pred_cm.append(calculate_cm(predicted_complex[i]))
 
-# orig_papr, clip_papr, pred_papr = np.array(orig_papr), np.array(clip_papr), np.array(pred_papr)
+orig_papr, clip_papr, pred_papr = np.array(orig_papr), np.array(clip_papr), np.array(pred_papr)
 orig_cm, clip_cm, pred_cm = np.array(orig_cm), np.array(clip_cm), np.array(pred_cm)
 
 # 6. Plot the CCDF
 title = f'NN{tech.upper()} Predicted OFDM\n{params}'
 labels = ['Original OFDM', f'{tech.upper()}', f'NN{tech.upper()} Predicted OFDM']
-# papr_list = [orig_papr, clip_papr, pred_papr]
+papr_list = [orig_papr, clip_papr, pred_papr]
 cm_list = [orig_cm, clip_cm, pred_cm]
-
-# plot_ccdf_compare(papr_list, f'Original vs {tech.upper()} vs {title}', labels)
-plot_ccdf_compare(cm_list, f'Original vs {tech.upper()} vs {title}', labels, metric="CM")
 
 # fixme: both percentile and max are not the most efficient solutions
 
 # todo: find a way to embed the floor part into the plotting function
 # 1. Define the target y-levels (probabilities)
-# papr_target_y = 1e-4
+papr_target_y = 1e-4
 cm_target_y = 1e-3
 
 # 2. Convert CCDF y-level to a standard percentile (e.g., 1e-4 becomes 99.99)
-# papr_percentile = (1.0 - papr_target_y) * 100.0
+papr_percentile = (1.0 - papr_target_y) * 100.0
 cm_percentile = (1.0 - cm_target_y) * 100.0
 
 # 3. Extract the exact x-axis values (PAPR/CM) where the line cuts the graph
 # (This completely replaces the need for y_axis, np.where, and manual sorting!)
-# papr_vlines = [
-#     np.percentile(orig_papr, papr_percentile),
-#     np.percentile(clip_papr, papr_percentile),
-#     np.percentile(pred_papr, papr_percentile)
-# ]
+papr_vlines = [
+    np.percentile(orig_papr, papr_percentile),
+    np.percentile(clip_papr, papr_percentile),
+    np.percentile(pred_papr, papr_percentile)
+]
 
 cm_vlines = [
     np.percentile(orig_cm, cm_percentile),
@@ -347,10 +292,12 @@ cm_vlines = [
 # ]
 
 # # 4. Plot!
-# # papr_image_path = os.path.join(relev, f"{opt}_{mod}_{train_val_test_str}_{lr_str}_papr.png")
+# # papr_image_path = os.path.join(relev, f"{opt}_{mod}_{train_val_test_str}_{lr_str}_papr")
+# plot_ccdf_compare(papr_list, f'Original vs {tech.upper()} vs {title}', labels)
 # plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines)
 
-# cm_image_path = os.path.join(relev, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_cm.png")
+cm_image_path = os.path.join(relev, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_cm")
+plot_ccdf_compare(cm_list, f'Original vs {tech.upper()} vs {title}', labels, metric="CM")
 plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
 
 # -----------------------------------------------------------------------------
