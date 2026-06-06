@@ -49,22 +49,20 @@ data_size = 100
 train_size = 70
 val_size = 10
 test_size = data_size - train_size - val_size
-if test_size:
-    one_batch = None
-else:
-    test_size = 1
-    one_batch = "00"
-train_val_test_str = f"{train_size}_{val_size}_{test_size}" if val_size else f"{train_size}_{test_size}"
-print(f"dataset of size {data_size} is split into {train_size} training files, and {val_size} validation and {test_size} testing batches respectively ({train_val_test_str} used in naming files)")
+train_val_test = f"{train_size}_{val_size}_{test_size}" if val_size else f"{train_size}_{test_size}"
+print(f"dataset of size {data_size} is split into {train_size} training files, and {val_size} validation and {test_size} testing batches respectively ({train_val_test} used in naming files)")
+one_batch = None
 
-batch_suffix = ""
+if not test_size:
+    one_batch = '00'
+
 if one_batch:
-    batch_suffix = f"Batch #{one_batch}"
+    batch_idx = int(one_batch)
     print(f"This one batch is of index {one_batch}")
-    if train_size + val_size == data_size:
-        print(batch_suffix, "was already used in training")
+    batch_suffix = f"Batch #{one_batch}"
+    print(batch_suffix, "was already used in training")
 
-params = f"{opt} optimizer {tech.upper()} {mod.upper()} lr = {lr}\n({train_size} Training/{val_size} Validation/{test_size} Testing){" (" + batch_suffix + ")" if batch_suffix else ''}"
+params = f"{opt} optimizer {tech.upper()} {mod.upper()} lr = {lr}\n({train_size} Training/{val_size} Validation/{test_size} Testing){" (" + batch_suffix + ")" if one_batch else ''}"
 print(params)
 
 norm_dir = "./norm dir/"
@@ -98,16 +96,29 @@ cell6 = time.time()
 dataset_real = FastOFDMDataset(norm_dir, part='real')
 dataset_imag = FastOFDMDataset(norm_dir, part='imag')
 
+if one_batch:
+    # Use the one_batch file for testing
+    test_dataset_real = Subset(dataset_real, range(batch_idx, batch_idx + 1))
+    test_dataset_imag = Subset(dataset_imag, range(batch_idx, batch_idx + 1))
+else:
+    # Use the last test_size files for testing
+    test_dataset_real = Subset(dataset_real, range(data_size - test_size, data_size))
+    test_dataset_imag = Subset(dataset_imag, range(data_size - test_size, data_size))
+
+# We set shuffle=False to ensure real and imag batches stay perfectly aligned
+test_loader_real = DataLoader(test_dataset_real, batch_size=None, shuffle=False)
+test_loader_imag = DataLoader(test_dataset_imag, batch_size=None, shuffle=False)
+
 # -----------------------------------------------------------------------------
 cell10 = time.time()
 
 # ! this part is actually unnecessary in the notebook as the checkpoints are already loaded
 checkpoint_re = torch.load(
-    os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_weights_limits_re.pth"),
+    os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test}_{lr_str}_weights_limits_re.pth"),
     weights_only=False
 )
 checkpoint_im = torch.load(
-    os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_weights_limits_im.pth"),
+    os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test}_{lr_str}_weights_limits_im.pth"),
     weights_only=False
 )
 
@@ -134,100 +145,65 @@ Y_i_max = checkpoint_im['Y_max']
 
 # -----------------------------------------------------------------------------
 
-if one_batch:
-    # 2. Grab one batch of data to test (Load the dictionary packages)
-    pkg_real = torch.load(os.path.join(norm_dir, f"{mod}_{tech}_part_{one_batch}_real.pt"), weights_only=False)
-    pkg_imag = torch.load(os.path.join(norm_dir, f"{mod}_{tech}_part_{one_batch}_imag.pt"), weights_only=False)
-    # Extract tensors
-    test_X_real, test_Y_real = pkg_real['X_norm'], pkg_real['Y_norm']
-    test_X_imag, test_Y_imag = pkg_imag['X_norm'], pkg_imag['Y_norm']
+# fixme: make sure this block denormalizes original and clipped values correctly
 
-    # 3. Generate Predictions (Reshape, Predict, Reshape back)
-    with torch.no_grad():
-        # Memoryless flattening
-        X_real_flat = test_X_real.view(-1, 1).to(device)
-        X_imag_flat = test_X_imag.view(-1, 1).to(device)
+# Generate Predictions for all test_size test files
+all_original, all_clipped, all_predicted = [], [], []
 
-        predicted_real = Test_Mod_Re(X_real_flat).view_as(test_X_real).cpu().numpy()
-        predicted_imag = Test_Mod_Im(X_imag_flat).view_as(test_X_imag).cpu().numpy()
+test_loss_real = 0.0
+test_loss_imag = 0.0
+with torch.no_grad():
+    for (X_real, Y_real), (X_imag, Y_imag) in zip(test_loader_real, test_loader_imag):
+        # Move inputs to device
+        X_real, X_imag = X_real.to(device), X_imag.to(device)
 
-    # Denormalize using exact dictionary limits
-    # ? which limits should i use when using one_batch, local or global?
-    # pred_denorm_real = denormalize(predicted_real, (pkg_real['Y_min'], pkg_real['Y_max']))
-    # pred_denorm_imag = denormalize(predicted_imag, (pkg_imag['Y_min'], pkg_imag['Y_max']))
-    pred_denorm_real = denormalize(predicted_real, (Y_r_min, Y_r_max))
-    pred_denorm_imag = denormalize(predicted_imag, (Y_i_min, Y_i_max))
+        # 1. Flatten for memoryless prediction
+        X_real_flat = X_real.view(-1, 1)
+        X_imag_flat = X_imag.view(-1, 1)
 
-    # 4. Reconstruct the Complex OFDM Signals
-    original_complex = test_X_real.numpy() + 1j * test_X_imag.numpy()
-    clipped_complex = test_Y_real.numpy() + 1j * test_Y_imag.numpy()
-    predicted_complex = pred_denorm_real + 1j * pred_denorm_imag
-else:
-    # 2. Setup the Test Data (Files (train_size + val_size) -> data_size - 1)
-    test_dataset_real = Subset(dataset_real, range(train_size + val_size, data_size))
-    test_dataset_imag = Subset(dataset_imag, range(train_size + val_size, data_size))
+        # Predict
+        # ! shouldnt use .numpy() method because of criterion
+        pred_real_flat = Test_Mod_Re(X_real_flat)
+        pred_imag_flat = Test_Mod_Im(X_imag_flat)
 
-    # We set shuffle=False to ensure real and imag batches stay perfectly aligned
-    test_loader_real = DataLoader(test_dataset_real, batch_size=None, shuffle=False)
-    test_loader_imag = DataLoader(test_dataset_imag, batch_size=None, shuffle=False)
+        # 2. Calculate MSE Loss on the flat tensors
+        loss_real = criterion(pred_real_flat, Y_real.view(-1, 1))
+        loss_imag = criterion(pred_imag_flat, Y_imag.view(-1, 1))
 
-    # 3. Generate Predictions for all test_size test files
-    all_original, all_clipped, all_predicted = [], [], []
+        test_loss_real += loss_real.item()
+        test_loss_imag += loss_imag.item()
 
-    test_loss_real = 0.0
-    test_loss_imag = 0.0
-    with torch.no_grad():
-        for (X_real, Y_real), (X_imag, Y_imag) in zip(test_loader_real, test_loader_imag):
-            # Move inputs to device
-            X_real, X_imag = X_real.to(device), X_imag.to(device)
+        # 3. Reshape back to the original array shape (e.g. [10000, 1024])
+        pred_real = pred_real_flat.view_as(X_real).cpu().numpy()
+        pred_imag = pred_imag_flat.view_as(X_imag).cpu().numpy()
 
-            # 1. Flatten for memoryless prediction
-            X_real_flat = X_real.view(-1, 1)
-            X_imag_flat = X_imag.view(-1, 1)
+        # 4. Denormalize using the exact physical limits from the dictionary!
+        pred_denorm_real = denormalize(pred_real, (Y_r_min, Y_r_max))
+        pred_denorm_imag = denormalize(pred_imag, (Y_i_min, Y_i_max))
 
-            # Predict
-            # ! shouldnt use .numpy() method because of criterion
-            pred_real_flat = Test_Mod_Re(X_real_flat)
-            pred_imag_flat = Test_Mod_Im(X_imag_flat)
+        # 5. Reconstruct complex signals
+        orig_complex = X_real.cpu().numpy() + 1j * X_imag.cpu().numpy()
+        clip_complex = Y_real.cpu().numpy() + 1j * Y_imag.cpu().numpy()
+        pred_complex = pred_denorm_real + 1j * pred_denorm_imag
 
-            # 2. Calculate MSE Loss on the flat tensors
-            loss_real = criterion(pred_real_flat, Y_real.view(-1, 1))
-            loss_imag = criterion(pred_imag_flat, Y_imag.view(-1, 1))
+        all_original.append(orig_complex)
+        all_clipped.append(clip_complex)
+        all_predicted.append(pred_complex)
 
-            test_loss_real += loss_real.item()
-            test_loss_imag += loss_imag.item()
+# Print the final average test metrics
+avg_test_loss_real = test_loss_real / len(test_loader_real)
+avg_test_loss_imag = test_loss_imag / len(test_loader_imag)
 
-            # 3. Reshape back to the original array shape (e.g. [10000, 1024])
-            pred_real = pred_real_flat.view_as(X_real).cpu().numpy()
-            pred_imag = pred_imag_flat.view_as(X_imag).cpu().numpy()
+print(f'\n--- Test Set Metrics ({test_size + "Unseen Files" if not one_batch else "1 Unseen File"}) ---')
+print(f'Average Real Module MSE Loss: {avg_test_loss_real:.6f}')
+print(f'Average Imag Module MSE Loss: {avg_test_loss_imag:.6f}')
 
-            # 4. Denormalize using the exact physical limits from the dictionary!
-            pred_denorm_real = denormalize(pred_real, (Y_r_min, Y_r_max))
-            pred_denorm_imag = denormalize(pred_imag, (Y_i_min, Y_i_max))
+# 4. Concatenate the test_size batches into one massive array for evaluation
+original_complex = np.concatenate(all_original, axis=0)
+clipped_complex = np.concatenate(all_clipped, axis=0)
+predicted_complex = np.concatenate(all_predicted, axis=0)
 
-            # 5. Reconstruct complex signals
-            orig_complex = X_real.cpu().numpy() + 1j * X_imag.cpu().numpy()
-            clip_complex = Y_real.cpu().numpy() + 1j * Y_imag.cpu().numpy()
-            pred_complex = pred_denorm_real + 1j * pred_denorm_imag
-
-            all_original.append(orig_complex)
-            all_clipped.append(clip_complex)
-            all_predicted.append(pred_complex)
-
-    # Print the final average test metrics
-    avg_test_loss_real = test_loss_real / len(test_loader_real)
-    avg_test_loss_imag = test_loss_imag / len(test_loader_imag)
-
-    print(f'\n--- Test Set Metrics ({test_size} Unseen Files) ---')
-    print(f'Average Real Module MSE Loss: {avg_test_loss_real:.6f}')
-    print(f'Average Imag Module MSE Loss: {avg_test_loss_imag:.6f}')
-
-    # 4. Concatenate the test_size batches into one massive array for evaluation
-    original_complex = np.concatenate(all_original, axis=0)
-    clipped_complex = np.concatenate(all_clipped, axis=0)
-    predicted_complex = np.concatenate(all_predicted, axis=0)
-
-    print(f'Testing complete! Aggregated {test_size * samples_per_L} OFDM symbols.')
+print(f'Testing complete! Aggregated {test_size * samples_per_L if not one_batch else samples_per_L} OFDM symbols.')
 
 # -----------------------------------------------------------------------------
 cell11 = time.time()
@@ -287,11 +263,11 @@ cm_vlines = [
 # ]
 
 # 4. Plot!
-# # papr_image_path = os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_papr")
+# # papr_image_path = os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test}{"_#" + one_batch if one_batch else ''}_{lr_str}_papr")
 # plot_ccdf_compare(papr_list, f'Original vs {tech.upper()} vs {title}', labels)
 # plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines)
 
-# cm_image_path = os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_cm")
+# cm_image_path = os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test}{"_#" + one_batch if one_batch else ''}_{lr_str}_cm")
 plot_ccdf_compare(cm_list, f'Original vs {tech.upper()} vs {title}', labels, metric="cm")
 plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
 

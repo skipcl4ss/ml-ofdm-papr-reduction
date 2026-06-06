@@ -42,7 +42,7 @@ tech = "scf"
 
 # Hyperparameters (used only in saving and loading files, not in the actual C&F process)
 # lr = 0.001
-lr = 0.1
+lr = 0.05
 lr_list = str(float(lr)).split(".")
 lr_str = f"dot{lr_list[1]}" if lr < 1 else f"{lr_list[0]}dot{lr_list[1]}"
 
@@ -55,12 +55,11 @@ data_size = 100
 train_size = 70
 val_size = 10
 test_size = data_size - train_size - val_size
-if test_size:
-    one_batch = None
-else:
-    test_size = 1
-    one_batch = "00"
-train_val_test_str = f"{train_size}_{val_size}_{test_size}" if val_size else f"{train_size}_{test_size}"
+train_val_test = f"{train_size}_{val_size}_{test_size}" if val_size else f"{train_size}_{test_size}"
+one_batch = None
+
+if not test_size:
+    one_batch = '00'
 
 params = f"{opt} optimizer {tech.upper()} {mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)\nlr = {lr} ({train_size} Training/{val_size} Validation/{test_size} Testing)"
 
@@ -73,11 +72,11 @@ relev_dir = "./relevant files/"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 checkpoint_re = torch.load(
-    os.path.join(relev_dir, f"{opt}_{mod}_{tech}_weights_limits_re_{train_val_test_str}_{lr_str}.pth"),
+    os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test}_{lr_str}_weights_limits_re.pth"),
     weights_only=False
 )
 checkpoint_im = torch.load(
-    os.path.join(relev_dir, f"{opt}_{mod}_{tech}_weights_limits_im_{train_val_test_str}_{lr_str}.pth"),
+    os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test}_{lr_str}_weights_limits_im.pth"),
     weights_only=False
 )
 
@@ -122,7 +121,7 @@ scf_time = 0
 icf_time = 0
 nn_time = 0
 
-constel_image_path = os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_")
+constel_image_path = os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test}_{lr_str}_")
 
 EbNo_range = np.arange(0, stop + 1, 1) # does not affect ccdf
 bits_per_symbol = int(np.log2(M))

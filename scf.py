@@ -40,7 +40,7 @@ tech = "scf"
 
 # Hyperparameters (used only in saving and loading files, not in the actual C&F process)
 # lr = 0.001
-lr = 0.1
+lr = 0.05
 lr_list = str(float(lr)).split(".")
 lr_str = f"dot{lr_list[1]}" if lr < 1 else f"{lr_list[0]}dot{lr_list[1]}"
 
@@ -53,12 +53,11 @@ data_size = 100
 train_size = 70
 val_size = 10
 test_size = data_size - train_size - val_size
-if test_size:
-    one_batch = None
-else:
-    test_size = 1
-    one_batch = "00"
-train_val_test_str = f"{train_size}_{val_size}_{test_size}" if val_size else f"{train_size}_{test_size}"
+train_val_test = f"{train_size}_{val_size}_{test_size}" if val_size else f"{train_size}_{test_size}"
+one_batch = None
+
+if not test_size:
+    one_batch = '00'
 
 params = f"{opt} optimizer {tech.upper()} {mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)\nlr = {lr} ({train_size} Training/{val_size} Validation/{test_size} Testing)"
 
@@ -71,11 +70,11 @@ relev_dir = "./relevant files/"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 checkpoint_re = torch.load(
-    os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_weights_limits_re.pth"),
+    os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test}_{lr_str}_weights_limits_re.pth"),
     weights_only=False
 )
 checkpoint_im = torch.load(
-    os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_weights_limits_im.pth"),
+    os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test}_{lr_str}_weights_limits_im.pth"),
     weights_only=False
 )
 
@@ -270,7 +269,7 @@ print("time taken in the icf calculations:", icf_time)
 print("time taken in outer samples_per_L loop:", samples_per_L_minus_scf_icf_time)
 
 labels = ['Original', 'Clipped (SCF)', f'SCF ({iterations_str})', f'Clipped ({iterations_str})', f'ICF ({iterations_str})', f'NN{tech.upper()} Predicted']
-signals_image_path = os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_signals.png")
+signals_image_path = os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test}_{lr_str}_signals.png")
 # plot_signals(signals, labels, A)
 plot_signals2(signals, labels, A, signals_image_path)
 
