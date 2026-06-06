@@ -357,7 +357,6 @@ def plot_signals2(signals, labels, clip_threshold=None, iterations=3, save=False
     # # plt.tight_layout()
     # plt.show()
 
-# todo: make another function for raw data
 def plot_dataset_mapping(pt_file_path, title, raw=False, save=False):
     # Load the normalized tensor data
     if raw:
@@ -375,10 +374,10 @@ def plot_dataset_mapping(pt_file_path, title, raw=False, save=False):
     right = x.max()
     bottom = y.min()
     top = y.max()
-    print(left == -1, bottom == -1)
-    print(right == 1, top == 1)
+    # print(left == -1, bottom == -1)
+    # print(right == 1, top == 1)
 
-    print(left, right, bottom, top)
+    # print(left, right, bottom, top)
 
     # Plot Input vs Target
     plt.figure(figsize=(8, 6))

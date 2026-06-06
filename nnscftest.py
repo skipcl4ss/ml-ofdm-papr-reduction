@@ -67,15 +67,10 @@ if one_batch:
 params = f"{opt} optimizer {tech.upper()} {mod.upper()} lr = {lr}\n({train_size} Training/{val_size} Validation/{test_size} Testing){" (" + batch_suffix + ")" if batch_suffix else ''}"
 print(params)
 
-raw_dir = "./raw dir/"
 norm_dir = "./norm dir/"
-relev = "./relevant files/"
-os.makedirs(raw_dir, exist_ok=True)
-os.makedirs(norm_dir, exist_ok=True)
-os.makedirs(relev, exist_ok=True)
-print(raw_dir, "is the location of the raw unnormalized data files")
+relev_dir = "./relevant files/"
 print(norm_dir, "is the location of the normalized data files")
-print(relev, "is the location of other important files such as checkpoints and PNGs")
+print(relev_dir, "is the location of other important files such as checkpoints and PNGs")
 
 # -----------------------------------------------------------------------------
 cell3 = time.time()
@@ -108,11 +103,11 @@ cell10 = time.time()
 
 # ! this part is actually unnecessary in the notebook as the checkpoints are already loaded
 checkpoint_re = torch.load(
-    os.path.join(relev, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_weights_limits_re.pth"),
+    os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_weights_limits_re.pth"),
     weights_only=False
 )
 checkpoint_im = torch.load(
-    os.path.join(relev, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_weights_limits_im.pth"),
+    os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_weights_limits_im.pth"),
     weights_only=False
 )
 
@@ -291,19 +286,19 @@ cm_vlines = [
 #     np.max(pred_cm)
 # ]
 
-# # 4. Plot!
-# # papr_image_path = os.path.join(relev, f"{opt}_{mod}_{train_val_test_str}_{lr_str}_papr")
+# 4. Plot!
+# # papr_image_path = os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_papr")
 # plot_ccdf_compare(papr_list, f'Original vs {tech.upper()} vs {title}', labels)
 # plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines)
 
-cm_image_path = os.path.join(relev, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_cm")
-plot_ccdf_compare(cm_list, f'Original vs {tech.upper()} vs {title}', labels, metric="CM")
+# cm_image_path = os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_cm")
+plot_ccdf_compare(cm_list, f'Original vs {tech.upper()} vs {title}', labels, metric="cm")
 plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
 
 # -----------------------------------------------------------------------------
 end = time.time()
-# ~98s at test_size = 20
-# ~6s at one_batch != None
+# ~s at test_size = 20
+# ~s at one_batch != None
 print(f"\nTotal execution time: {end - start:.2f} seconds")
 print(f"Imports and Device Setup (Cell 1) time: {cell3 - start:.2f} seconds")
 print(f"Highly Optimized Dataset Class (Cell 3) time: {cell6 - cell3:.2f} seconds")

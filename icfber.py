@@ -8,6 +8,8 @@ from nnscf import NNSCFMapper, normalize, denormalize
 import os
 import time
 
+# todo: reconsider whether the normalization is correctly implemented here and in other scripts
+
 start = time.time()
 
 # Parameters
@@ -62,8 +64,7 @@ train_val_test_str = f"{train_size}_{val_size}_{test_size}" if val_size else f"{
 
 params = f"{opt} optimizer {tech.upper()} {mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)\nlr = {lr} ({train_size} Training/{val_size} Validation/{test_size} Testing)"
 
-relev = "./relevant files/"
-os.makedirs(relev, exist_ok=True)
+relev_dir = "./relevant files/"
 
 # * Load nnscf model
 
@@ -72,11 +73,11 @@ os.makedirs(relev, exist_ok=True)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 checkpoint_re = torch.load(
-    os.path.join(relev, f"{opt}_{mod}_{tech}_weights_limits_re_{train_val_test_str}_{lr_str}.pth"),
+    os.path.join(relev_dir, f"{opt}_{mod}_{tech}_weights_limits_re_{train_val_test_str}_{lr_str}.pth"),
     weights_only=False
 )
 checkpoint_im = torch.load(
-    os.path.join(relev, f"{opt}_{mod}_{tech}_weights_limits_im_{train_val_test_str}_{lr_str}.pth"),
+    os.path.join(relev_dir, f"{opt}_{mod}_{tech}_weights_limits_im_{train_val_test_str}_{lr_str}.pth"),
     weights_only=False
 )
 
@@ -118,12 +119,11 @@ num_symb_minus_icf_nn_time = 0
 icf_time = 0
 nn_time = 0
 
-constel_image_path = os.path.join(relev, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_")
+constel_image_path = os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_")
 
 EbNo_range = np.arange(0, stop + 1, 1) # does not affect ccdf
 bits_per_symbol = int(np.log2(M))
 num_symb = 100
-
 
 tx_ofdm_no_clip = None
 rx_symbols_no_clip = None
@@ -199,7 +199,7 @@ for EbNo_dB in EbNo_range:
 
             # if (EbNo_dB == EbNo_range[0] or EbNo_dB == EbNo_range[-1]) and not plotted:
             #     plot_constellation(rx_symbols_clipped_icf, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Clipped)', label='Rx Symbols (Clipped)', color='magenta', save=(constel_image_path+f"Rx_clipped_icf_{EbNo_dB}db.png"))
-            #     plot_constellation(rx_symbols_icf, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Filtered)', label='Rx Symbols (Filtered)', color='red', , save=(constel_image_path+f"Rx_icf_{EbNo_dB}db.png"))
+            #     plot_constellation(rx_symbols_icf, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Filtered)', label='Rx Symbols (Filtered)', color='red', save=(constel_image_path+f"Rx_icf_{EbNo_dB}db.png"))
 
         if (EbNo_dB == EbNo_range[0] or EbNo_dB == EbNo_range[-1]) and not plotted:
             plot_constellation(rx_symbols_icf, mod, limit, title=f'Received Constellation at E$_b$/N$_0$ = {EbNo_dB}dB (Filtered)', label='Rx Symbols (Filtered)', color='red', save=(constel_image_path+f"Rx_icf_{EbNo_dB}db.png"))
@@ -295,7 +295,7 @@ plot_ber(EbNo_range, BER_list, title, labels, M)
 
 end = time.time()
 # ~s (num_symb = 1)
-# ~3s (num_symb = 100)
+# ~s (num_symb = 100)
 print(f"Total execution time: {end - start:.2f} seconds")
 print()
 print("time taken in the icf calculations:", icf_time)

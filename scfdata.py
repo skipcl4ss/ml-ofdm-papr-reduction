@@ -8,6 +8,7 @@ import os
 import time
 
 # todo: see a way to add ber to the data so that we can use it in the loss function
+# todo: reconsider whether the normalization is correctly implemented here and in other scripts
 
 start = time.time()
 
@@ -38,9 +39,9 @@ data_size = 100
 params = f"SCF {mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)"
 
 raw_dir = "./raw dir/"
-relev = "./relevant files/"
+relev_dir = "./relevant files/"
 os.makedirs(raw_dir, exist_ok=True)
-os.makedirs(relev, exist_ok=True)
+os.makedirs(relev_dir, exist_ok=True)
 
 data_size_minus_samples_per_L_loop = 0
 samples_per_L_minus_scf_time = 0
@@ -126,15 +127,15 @@ for i in range(data_size):
     t6 = time.time()
     data_size_minus_samples_per_L_loop += t6 - t5
 
-torch.save(raw_limits, os.path.join(relev, f"{mod}_scf_{data_size}_raw_limits.pt"))
+torch.save(raw_limits, os.path.join(relev_dir, f"{mod}_scf_{data_size}_raw_limits.pt"))
 
 t7 = time.time()
 data_size_minus_samples_per_L_loop += t7 - t6
 
 real_path = f"{mod}_scf_part_{0:02d}_real"
 imag_path = f"{mod}_scf_part_{0:02d}_imag"
-plot_dataset_mapping(os.path.join(raw_dir, real_path + ".pt"), f"NNSCF Real\n{params} Batch #{0:02d}", raw=True, save=os.path.join(relev, real_path + ".png"))
-plot_dataset_mapping(os.path.join(raw_dir, imag_path + ".pt"), f"NNSCF Imaginary\n{params} Batch #{0:02d}", raw=True, save=os.path.join(relev, imag_path + ".png"))
+plot_dataset_mapping(os.path.join(raw_dir, real_path + ".pt"), f"NNSCF Real\n{params} Batch #{0:02d}", raw=True, save=os.path.join(relev_dir, real_path + ".png"))
+plot_dataset_mapping(os.path.join(raw_dir, imag_path + ".pt"), f"NNSCF Imaginary\n{params} Batch #{0:02d}", raw=True, save=os.path.join(relev_dir, imag_path + ".png"))
 
 # x = torch.load(os.path.join(raw_dir, real_path + ".pt"), weights_only=True)
 # X = normalize(x['X_raw'], (min(raw_limits['X_r_min']), max(raw_limits['X_r_max'])))
@@ -142,8 +143,8 @@ plot_dataset_mapping(os.path.join(raw_dir, imag_path + ".pt"), f"NNSCF Imaginary
 # torch.save({
 #     "X_norm": X,
 #     "Y_norm": Y
-# }, os.path.join(relev, "test.pt"))
-# plot_dataset_mapping(os.path.join(relev, "test.pt"), f"NNSCF Real\n{params}")
+# }, os.path.join(relev_dir, "test.pt"))
+# plot_dataset_mapping(os.path.join(relev_dir, "test.pt"), f"NNSCF Real\n{params}")
 
 end = time.time()
 print(f'\nTotal execution time: {int((end - start) // 60)}:{(end - start) % 60:05.2f} minutes')

@@ -13,8 +13,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # todo: see how can i use loss function to reduce ber
 criterion = nn.MSELoss()
 
-# ! instead of returning only two parts (real and imag) of two datasets (tx and rx), returns only one part of one dataset
-#%%
+# ! instead of returning two parts (real and imag) of two datasets (tx and rx), returns only one part of one dataset
 def normalize(raw, limits):
     min, max = limits
     norm = 2.0 * ((raw - min) / (max - min)) - 1.0 if max != min else raw

@@ -8,6 +8,8 @@ from nnscf import NNSCFMapper, normalize, denormalize
 import os
 import time
 
+# todo: reconsider whether the normalization is correctly implemented here and in other scripts
+
 start = time.time()
 
 # Parameters
@@ -60,8 +62,7 @@ train_val_test_str = f"{train_size}_{val_size}_{test_size}" if val_size else f"{
 
 params = f"{opt} optimizer {tech.upper()} {mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)\nlr = {lr} ({train_size} Training/{val_size} Validation/{test_size} Testing)"
 
-relev = "./relevant files/"
-os.makedirs(relev, exist_ok=True)
+relev_dir = "./relevant files/"
 
 # * Load nnscf model
 
@@ -70,11 +71,11 @@ os.makedirs(relev, exist_ok=True)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 checkpoint_re = torch.load(
-    os.path.join(relev, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_weights_limits_re.pth"),
+    os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_weights_limits_re.pth"),
     weights_only=False
 )
 checkpoint_im = torch.load(
-    os.path.join(relev, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_weights_limits_im.pth"),
+    os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_weights_limits_im.pth"),
     weights_only=False
 )
 
@@ -166,8 +167,8 @@ middle = time.time()
 tx_real = normalize(tx_time[0], (X_r_min, X_r_max))
 tx_imag = normalize(tx_time[1], (X_i_min, X_i_max))
 
-tx_real = torch.tensor(tx_time[0], dtype=torch.float32)
-tx_imag = torch.tensor(tx_time[1], dtype=torch.float32)
+tx_real = torch.tensor(tx_real, dtype=torch.float32)
+tx_imag = torch.tensor(tx_imag, dtype=torch.float32)
 
 # 3. Generate Predictions (No gradients needed for testing)
 with torch.no_grad():
@@ -209,11 +210,11 @@ plot_ccdf_compare(cm_list, f"Original vs ICF vs {title}", labels, metric="CM")
 
 # todo: find a way to embed the floor part into the plotting function
 # 1. Define the target y-levels (probabilities)
-# papr_target_y = 1e-4
+papr_target_y = 1e-4
 cm_target_y = 1e-3
 
 # 2. Convert CCDF y-level to a standard percentile (e.g., 1e-4 becomes 99.99)
-# papr_percentile = (1.0 - papr_target_y) * 100.0
+papr_percentile = (1.0 - papr_target_y) * 100.0
 cm_percentile = (1.0 - cm_target_y) * 100.0
 
 # 3. Extract the exact x-axis values (PAPR/CM) where the line cuts the graph
@@ -237,13 +238,13 @@ cm_vlines = [
 # ]
 
 # plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines)
-plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
+# plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
 # labels = ["OG", "ICF 1", "ICF 2", "ICF 3"]
 # plot_ccdf_compare([unclipped_papr, *icf_papr], label=labels, metric="papr")
 # plot_ccdf_compare([unclipped_cm, *icf_cm], label=labels, metric="cm")
 
 end = time.time()
-# ~8s
+# ~s
 print(f"Total execution time: {end - start:.2f} seconds")
 print(f"{tech.upper()} execution time: {middle - start:.2f} seconds")
 print(f"NN{tech.upper()} execution time: {end - middle:.2f} seconds")
@@ -252,7 +253,7 @@ print("time taken in the icf calculations:", icf_time)
 print("time taken in outer samples_per_L loop:", samples_per_L_minus_icf_time)
 
 labels = ['Original', f'Clipped ({iterations_str})', f'ICF ({iterations_str})', f'NN{tech.upper()} Predicted']
-signals_image_path = os.path.join(relev, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_signals.png")
+signals_image_path = os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_signals.png")
 # plot_signals(signals, labels, A)
 plot_signals2(signals, labels, A, signals_image_path)
 
