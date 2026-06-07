@@ -121,8 +121,8 @@ for i in range(data_size):
 
 real_path = f"{mod}_icf_part_{0:02d}_real"
 imag_path = f"{mod}_icf_part_{0:02d}_imag"
-plot_dataset_mapping(os.path.join(raw_dir, real_path + ".pt"), f"NNICF Real\n{params} Batch #{0:02d}", raw=True, save=os.path.join(relev_dir, real_path + ".png"))
-plot_dataset_mapping(os.path.join(raw_dir, imag_path + ".pt"), f"NNICF Imaginary\n{params} Batch #{0:02d}", raw=True, save=os.path.join(relev_dir, imag_path + ".png"))
+plot_dataset_mapping(os.path.join(raw_dir, real_path + ".pt"), f"NNICF Real\n{params} Batch #{0:02d}", raw=False, save=os.path.join(relev_dir, real_path + ".png"))
+plot_dataset_mapping(os.path.join(raw_dir, imag_path + ".pt"), f"NNICF Imaginary\n{params} Batch #{0:02d}", raw=False, save=os.path.join(relev_dir, imag_path + ".png"))
 
 # x = torch.load(os.path.join(raw_dir, real_path + ".pt"), weights_only=True)
 # X = normalize(x['X_raw'], (min(raw_limits['X_r_min']), max(raw_limits['X_r_max'])))
