@@ -24,7 +24,7 @@ mod = "16qam"
 # mod = "qpsk"
 print(f"Using {mod.upper()} modulation technique")
 
-# clipping technique
+# Clipping technique
 # tech = "icf"
 tech = "scf"
 print(f"Using {tech} clipping technique")
@@ -32,52 +32,45 @@ print(f"Using {tech} clipping technique")
 # Hyperparameters
 epochs = 100
 # using 0.001 for Adam and 0.01 for LBFGS as default values
-lr = 0.001
-# lr = 0.01
+# lr = 0.001
+lr = 0.05
 lr_list = str(float(lr)).split(".")
 lr_str = f"dot{lr_list[1]}" if lr < 1 else f"{lr_list[0]}dot{lr_list[1]}"
 print(f"Hyperparameters: epochs = {epochs}, learning rate = {lr} ({lr_str} used in naming files), batch size = None (for now)")
 
 # Optimizer
-opt = "Adam"
-# opt = "LBFGS"
+# opt = "Adam"
+opt = "LBFGS"
 print(f"Using {opt} optimizer")
 
 # Data splitting
 # ! make sure that the splitting is the same as in renormalization.ipynb
-datasize = 100
-# datasize = 120
+data_size = 100
 train_size = 70
 val_size = 10
-test_size = datasize - train_size - val_size
+test_size = data_size - train_size - val_size
 if test_size:
     one_batch = None
 else:
     test_size = 1
     one_batch = "00"
 train_val_test_str = f"{train_size}_{val_size}_{test_size}" if val_size else f"{train_size}_{test_size}"
-print(f"dataset of size {datasize} is split into {train_size} training files, and {val_size} validation and {test_size} testing batches respectively ({train_val_test_str} used in naming files)")
+print(f"dataset of size {data_size} is split into {train_size} training files, and {val_size} validation and {test_size} testing batches respectively ({train_val_test_str} used in naming files)")
 
 batch_suffix = ""
 if one_batch:
     batch_suffix = f"Batch #{one_batch}"
     print(f"This one batch is of index {one_batch}")
-    if train_size + val_size == datasize:
+    if train_size + val_size == data_size:
         print(batch_suffix, "was already used in training")
 
 params = f"{opt} optimizer {tech.upper()} {mod.upper()} lr = {lr}\n({train_size} Training/{val_size} Validation/{test_size} Testing){" (" + batch_suffix + ")" if batch_suffix else ''}"
 print(params)
 
-og_pt_dir = "./pt_dir/"
-pt_dir = "./pt_dir_globalnorm/"
-model_dir = "./new architecture/"
-graph_dir = "./new architecture/"
-os.makedirs(og_pt_dir, exist_ok=True)
-os.makedirs(pt_dir, exist_ok=True)
-os.makedirs(model_dir, exist_ok=True)
-os.makedirs(graph_dir, exist_ok=True)
-print(og_pt_dir, "is the location of the original pt files before implementing the brand new normalization method suggested by gemini")
-print(f'"{pt_dir}", "{model_dir}", and "{graph_dir}" are the 3 locations for pt files, nn model weights and graphs respectively')
+norm_dir = "./norm dir/"
+relev_dir = "./relevant files/"
+print(norm_dir, "is the location of the normalized data files")
+print(relev_dir, "is the location of other important files such as checkpoints and PNGs")
 
 # -----------------------------------------------------------------------------
 cell3 = time.time()
@@ -88,11 +81,11 @@ class FastOFDMDataset(Dataset):
         self.part = part
 
     def __len__(self):
-        return datasize # Assuming exactly 100 pre-computed .pt files, regardless of train/test split
+        return data_size # Assuming exactly data_size pre-computed .pt files, regardless of train/test split
 
     def __getitem__(self, idx):
         # Instantly loads the pre-normalized tensors directly into memory!
-        file_path = os.path.join(self.folder_path, f"{mod}_{tech}_part_{idx:03d}_{self.part}.pt")
+        file_path = os.path.join(self.folder_path, f"{mod}_{tech}_part_{idx:02d}_{self.part}.pt")
         # Load the dictionary
         data_pkg = torch.load(file_path, weights_only=False)
 
@@ -102,26 +95,31 @@ class FastOFDMDataset(Dataset):
                 data_pkg['Y_min'], data_pkg['Y_max'])
 
 # -----------------------------------------------------------------------------
+cell5 = time.time()
+
+dataset_real = FastOFDMDataset(norm_dir, part='real')
+dataset_imag = FastOFDMDataset(norm_dir, part='imag')
+
+# -----------------------------------------------------------------------------
 cell9 = time.time()
 
 # 1. Load the Saved Models
 Test_Mod_Re = NNSCFMapper().to(device)
 Test_Mod_Im = NNSCFMapper().to(device)
 
-Test_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
-Test_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+Test_Mod_Re.load_state_dict(torch.load(os.path.join(relev_dir, f"{opt}_{mod}_{tech}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+Test_Mod_Im.load_state_dict(torch.load(os.path.join(relev_dir, f"{opt}_{mod}_{tech}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
 
 Test_Mod_Re.eval()
 Test_Mod_Im.eval()
 
 # -----------------------------------------------------------------------------
 
-dataset_real = FastOFDMDataset(pt_dir, part='real')
-dataset_imag = FastOFDMDataset(pt_dir, part='imag')
+# fixme: find alternative shuffling technique
 if one_batch:
     # 2. Grab one batch of data to test (Load the dictionary packages)
-    pkg_real = torch.load(os.path.join(pt_dir, f"{mod}_{tech}_part_{one_batch}_real.pt"), weights_only=False)
-    pkg_imag = torch.load(os.path.join(pt_dir, f"{mod}_{tech}_part_{one_batch}_imag.pt"), weights_only=False)
+    pkg_real = torch.load(os.path.join(norm_dir, f"{mod}_{tech}_part_{one_batch}_real.pt"), weights_only=False)
+    pkg_imag = torch.load(os.path.join(norm_dir, f"{mod}_{tech}_part_{one_batch}_imag.pt"), weights_only=False)
     # Extract tensors
     test_X_real, test_Y_real = pkg_real['X_norm'], pkg_real['Y_norm']
     test_X_imag, test_Y_imag = pkg_imag['X_norm'], pkg_imag['Y_norm']
@@ -144,12 +142,9 @@ if one_batch:
     clipped_complex = test_Y_real.numpy() + 1j * test_Y_imag.numpy()
     predicted_complex = pred_denorm_real + 1j * pred_denorm_imag
 else:
-#     # 2. Setup the Test Data (Files train_size->99)
-#     test_dataset_real = Subset(FastOFDMDataset(pt_dir, part='real'), range(train_size, datasize))
-#     test_dataset_imag = Subset(FastOFDMDataset(pt_dir, part='imag'), range(train_size, datasize))
-    # 2. Setup the Test Data (Files (train_size+val_size)->99)
-    test_dataset_real = Subset(dataset_real, range(train_size + val_size, datasize))
-    test_dataset_imag = Subset(dataset_imag, range(train_size + val_size, datasize))
+    # 2. Setup the Test Data (Files (train_size + val_size) -> data_size - 1)
+    test_dataset_real = Subset(dataset_real, range(train_size + val_size, data_size))
+    test_dataset_imag = Subset(dataset_imag, range(train_size + val_size, data_size))
 
     # We set shuffle=False to ensure real and imag batches stay perfectly aligned
     test_loader_real = DataLoader(test_dataset_real, batch_size=None, shuffle=False)
@@ -239,9 +234,6 @@ labels = ['Original OFDM', f'{tech.upper()}', f'NN{tech.upper()} Predicted OFDM'
 papr_list = [orig_papr, clip_papr, pred_papr]
 cm_list = [orig_cm, clip_cm, pred_cm]
 
-# plot_ccdf_compare(papr_list, f'Original vs {tech.upper()} vs {title}', labels)
-plot_ccdf_compare(cm_list, f'Original vs {tech.upper()} vs {title}', labels, metric="CM")
-
 # fixme: both percentile and max are not the most efficient solutions
 
 # todo: find a way to embed the floor part into the plotting function
@@ -273,21 +265,22 @@ cm_vlines = [
 #     np.max(pred_cm)
 # ]
 
-# # 4. Plot!
-# # papr_image_path = os.path.join(graph_dir, f"{opt}_{mod}_papr_{train_val_test_str}_{lr_str}.png")
-# # plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines, save=papr_image_path)
+# 4. Plot!
+# # papr_image_path = os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_papr")
+# plot_ccdf_compare(papr_list, f'Original vs {tech.upper()} vs {title}', labels)
 # plot_ccdf(pred_papr, title, metric="papr", vlines=papr_vlines)
 
-# cm_image_path = os.path.join(graph_dir, f"{opt}_{mod}_cm_{train_val_test_str}_{lr_str}.png")
+# cm_image_path = os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_cm")
+plot_ccdf_compare(cm_list, f'Original vs {tech.upper()} vs {title}', labels, metric="cm")
 plot_ccdf(pred_cm, title, metric="cm", vlines=cm_vlines)
 
 # -----------------------------------------------------------------------------
 end = time.time()
-# ~98s at test_size = 20
-# ~6s at one_batch != None
+# ~s at test_size = 20
+# ~s at one_batch != None
 print(f"\nTotal execution time: {end - start:.2f} seconds")
-print(f"Custom Activation Function (Cell 2) time: {cell3 - start:.2f} seconds")
-print(f"Highly Optimized Dataset Class (Cell 3) time: {cell9 - cell3:.2f} seconds")
+print(f"Imports and Device Setup (Cell 1) time: {cell3 - start:.2f} seconds")
+print(f"Highly Optimized Dataset Class (Cell 3) time: {cell5 - cell3:.2f} seconds")
+print(f"Initialization and DataLoaders (Cell 5) time: {cell9 - cell5:.2f} seconds")
 print(f"Testing (Cell 9) time: {cell10 - cell9:.2f} seconds")
 print(f"Plotting (Cell 10) time: {end - cell10:.2f} seconds")
-

@@ -7,7 +7,8 @@ from nnscf import normalize
 import os
 import time
 
-# todo: clean up this and other scf files
+# todo: see a way to add ber to the data so that we can use it in the loss function
+# todo: reconsider whether the normalization is correctly implemented here and in other scripts
 
 start = time.time()
 
@@ -23,7 +24,7 @@ cr_dB = 6
 cr = 10 ** (cr_dB / 20)
 iterations = 3
 
-# modulation scheme
+# Modulation scheme
 mod = "16qam"
 # mod = "qpsk"
 if mod == "16qam":
@@ -32,24 +33,23 @@ elif mod == "qpsk":
     M = 4
 modulate, _ = get_modem(M)
 
-# the actual size of the dataset
-datasize = 100
-# datasize = 120
+# Number of entries in the dataset
+data_size = 100
 
 params = f"SCF {mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)"
 
-# todo: see a way to add ber to the nnscf data so that we can use it in the loss function
+raw_dir = "./raw dir/"
+relev_dir = "./relevant files/"
+os.makedirs(raw_dir, exist_ok=True)
+os.makedirs(relev_dir, exist_ok=True)
 
-pt_dir = "./pt_dir/"
-os.makedirs(pt_dir, exist_ok=True)
-
-datasize_minus_samples_per_L_loop = 0
+data_size_minus_samples_per_L_loop = 0
 samples_per_L_minus_scf_time = 0
 scf_time = 0
 
 # tx, rx = [], []
 before_loop = time.time()
-for i in range(datasize):
+for i in range(data_size):
     loop_start = time.time() if i else before_loop
     tx_time, rx_time = [[], []], [[], []]
     for _ in range(samples_per_L):
@@ -97,7 +97,7 @@ for i in range(datasize):
         'Y_norm': Y_real_norm.detach().clone().to(torch.float32),
         'X_min': X_r_min, 'X_max': X_r_max,
         'Y_min': Y_r_min, 'Y_max': Y_r_max
-    }, os.path.join(pt_dir, f"{mod}_scf_part_{i:03d}_real.pt"))
+    }, os.path.join(raw_dir, f"{mod}_scf_part_{i:02d}_real.pt"))
 
     # Save Imaginary File as PyTorch Dictionary
     torch.save({
@@ -105,27 +105,37 @@ for i in range(datasize):
         'Y_norm': Y_imag_norm.detach().clone().to(torch.float32),
         'X_min': X_i_min, 'X_max': X_i_max,
         'Y_min': Y_i_min, 'Y_max': Y_i_max
-    }, os.path.join(pt_dir, f"{mod}_scf_part_{i:03d}_imag.pt"))
+    }, os.path.join(raw_dir, f"{mod}_scf_part_{i:02d}_imag.pt"))
 
     # Manually delete variables to free RAM for the next iteration
     del tx_time, rx_time, X_real_norm, X_imag_norm, Y_real_norm, Y_imag_norm
     # gc.collect()
 
     loop_end = time.time()
-    print(f"Iteration {i + 1}/{datasize} completed in {loop_end - loop_start:.2f} seconds")
+    print(f"Iteration {i + 1}/{data_size} completed in {loop_end - loop_start:.2f} seconds")
     print(f"{loop_end - before_loop:.2f} seconds passed since before loop start")
     t6 = time.time()
-    datasize_minus_samples_per_L_loop += t6 - t5
+    data_size_minus_samples_per_L_loop += t6 - t5
 
-title = f"Data Mapping\n{params}"
-plot_dataset_mapping(os.path.join(pt_dir, f"{mod}_scf_part_{0:03d}_real.pt"), "NNSCF Real " + title)
-plot_dataset_mapping(os.path.join(pt_dir, f"{mod}_scf_part_{0:03d}_imag.pt"), "NNSCF Imaginary " + title)
+real_path = f"{mod}_scf_part_{0:02d}_real"
+imag_path = f"{mod}_scf_part_{0:02d}_imag"
+plot_dataset_mapping(os.path.join(raw_dir, real_path + ".pt"), f"NNSCF Real\n{params} Batch #{0:02d}", raw=True, save=os.path.join(relev_dir, real_path + ".png"))
+plot_dataset_mapping(os.path.join(raw_dir, imag_path + ".pt"), f"NNSCF Imaginary\n{params} Batch #{0:02d}", raw=True, save=os.path.join(relev_dir, imag_path + ".png"))
+
+# x = torch.load(os.path.join(raw_dir, real_path + ".pt"), weights_only=True)
+# X = normalize(x['X_raw'], (min(raw_limits['X_r_min']), max(raw_limits['X_r_max'])))
+# Y = normalize(x['Y_raw'], (min(raw_limits['Y_r_min']), max(raw_limits['Y_r_max'])))
+# torch.save({
+#     "X_norm": X,
+#     "Y_norm": Y
+# }, os.path.join(relev_dir, "test.pt"))
+# plot_dataset_mapping(os.path.join(relev_dir, "test.pt"), f"NNSCF Real\n{params}")
 
 end = time.time()
-# ~4:33.3 min
-print(f'\nTotal execution time: {int((end - start) // 60)}:{(end - start) % 60:.1f} minutes')
+# ~min
+print(f'\nTotal execution time: {int((end - start) // 60)}:{(end - start) % 60:05.2f} minutes')
 print()
-print(f"time taken in the scf calculations: {int(scf_time // 60)}:{scf_time % 60:.1f} minutes")
-print(f"time taken in middle samples_per_L loop: {int(samples_per_L_minus_scf_time // 60)}:{samples_per_L_minus_scf_time % 60:.1f} minutes")
-print(f"time taken in outer datasize loop: {int(datasize_minus_samples_per_L_loop // 60)}:{datasize_minus_samples_per_L_loop % 60:.1f} minutes")
-print(f"time taken in plotting: {end - t6:.2f} seconds")
+print(f"time taken in the scf calculations: {int(scf_time // 60)}:{scf_time % 60:05.2f} minutes")
+print(f"time taken in middle samples_per_L loop: {int(samples_per_L_minus_scf_time // 60)}:{samples_per_L_minus_scf_time % 60:05.2f} minutes")
+print(f"time taken in outer data_size loop: {int(data_size_minus_samples_per_L_loop // 60)}:{data_size_minus_samples_per_L_loop % 60:05.2f} minutes")
+print(f"time taken in plotting:  {int((end - t6) // 60)}:{(end - t6) % 60:05.2f} minutes")

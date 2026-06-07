@@ -25,7 +25,7 @@ cr = 10 ** (cr_dB / 20)
 iterations = 3
 iterations_str = f"{iterations} iteration{"s" if iterations > 1 else ""}"
 
-# modulation scheme
+# Modulation scheme
 mod = "16qam"
 # mod = "qpsk"
 if mod == "16qam":
@@ -34,22 +34,25 @@ elif mod == "qpsk":
     M = 4
 modulate, _ = get_modem(M)
 
-# clipping technique
+# Clipping technique
 # tech = "icf"
 tech = "scf"
 
 # Hyperparameters (used only in saving and loading files, not in the actual C&F process)
-lr = 0.001
-# lr = 0.01
-lr_str = "dot" + str(lr).split(".")[1]
+# lr = 0.001
+lr = 0.1
+lr_list = str(float(lr)).split(".")
+lr_str = f"dot{lr_list[1]}" if lr < 1 else f"{lr_list[0]}dot{lr_list[1]}"
+
+# Optimizer
+# opt = "Adam"
+opt = "LBFGS"
 
 # Data splitting (used only in saving and loading files, not in the actual C&F process)
-datasize = 100
-# datasize = 120
+data_size = 100
 train_size = 70
-# val_size = 20
 val_size = 10
-test_size = datasize - train_size - val_size
+test_size = data_size - train_size - val_size
 if test_size:
     one_batch = None
 else:
@@ -57,14 +60,9 @@ else:
     one_batch = "00"
 train_val_test_str = f"{train_size}_{val_size}_{test_size}" if val_size else f"{train_size}_{test_size}"
 
-# Optimizer
-opt = "Adam"
-# opt = "LBFGS"
-
 params = f"{opt} optimizer {tech.upper()} {mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)\nlr = {lr} ({train_size} Training/{val_size} Validation/{test_size} Testing)"
 
-# model_dir = "./trained_models/"
-model_dir = "./new architecture/"
+relev_dir = "./relevant files/"
 
 # * Load nnscf model
 
@@ -76,8 +74,8 @@ NN_Mod_Re = NNSCFMapper().to(device)
 NN_Mod_Im = NNSCFMapper().to(device)
 
 # Inject the trained weights
-NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
-NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+NN_Mod_Re.load_state_dict(torch.load(os.path.join(relev_dir, f"{opt}_{mod}_{tech}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+NN_Mod_Im.load_state_dict(torch.load(os.path.join(relev_dir, f"{opt}_{mod}_{tech}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
 
 NN_Mod_Re.eval()
 NN_Mod_Im.eval()
@@ -183,8 +181,8 @@ labels = ['Original', f'ICF ({iterations_str})', f'NN{tech.upper()} Predicted']
 # papr_list = [unclipped_papr, icf_papr[-1], pred_papr]
 cm_list = [unclipped_cm, icf_cm[-1], pred_cm]
 
-# plot_ccdf_compare(papr_list, f"Original vs {tech.upper()} vs {title}", labels)
-plot_ccdf_compare(cm_list, f"Original vs {tech.upper()} vs {title}", labels, metric="CM")
+# plot_ccdf_compare(papr_list, f"Original vs ICF vs {title}", labels)
+plot_ccdf_compare(cm_list, f"Original vs ICF vs {title}", labels, metric="CM")
 
 # fixme: both percentile and max are not the most efficient solutions
 
@@ -224,7 +222,7 @@ cm_vlines = [
 # plot_ccdf_compare([unclipped_cm, *icf_cm], label=labels, metric="cm")
 
 end = time.time()
-# ~8s
+# ~s
 print(f"Total execution time: {end - start:.2f} seconds")
 print(f"{tech.upper()} execution time: {middle - start:.2f} seconds")
 print(f"NN{tech.upper()} execution time: {end - middle:.2f} seconds")
@@ -233,8 +231,9 @@ print("time taken in the icf calculations:", icf_time)
 print("time taken in outer samples_per_L loop:", samples_per_L_minus_icf_time)
 
 labels = ['Original', f'Clipped ({iterations_str})', f'ICF ({iterations_str})', f'NN{tech.upper()} Predicted']
+signals_image_path = os.path.join(relev_dir, f"{opt}_{mod}_{tech}_{train_val_test_str}_{lr_str}_signals.png")
 # plot_signals(signals, labels, A)
-plot_signals2(signals, labels, A)
+plot_signals2(signals, labels, A, signals_image_path)
 
 signals_re = {}
 signals_im = {}

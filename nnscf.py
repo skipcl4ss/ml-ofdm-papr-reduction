@@ -13,8 +13,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # todo: see how can i use loss function to reduce ber
 criterion = nn.MSELoss()
 
-# ! instead of returning only real or imag part of two datasets (tx and rx), returns only one part of one dataset
-# todo merge it with renormalization notebook
+# ! instead of returning two parts (real and imag) of two datasets (tx and rx), returns only one part of one dataset
+# todo: fix and merge it with renormalization notebook
 def normalize(X_raw):
     X_batch = torch.tensor(X_raw, dtype=torch.float32)
 
