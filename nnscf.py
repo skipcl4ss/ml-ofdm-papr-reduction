@@ -28,10 +28,10 @@ def normalize(X_raw):
 
 # ! should be used on real and imag of each entry in the dataset separately
 # ! to normalize the whole dataset using global values, run renormalization.ipynb after this function
-def denormalize(pred_norm, minmax):
-    raw_min, raw_max = minmax
-    pred_raw = ((pred_norm + 1.0) / 2.0) * (raw_max - raw_min) + raw_min if raw_max != raw_min else pred_norm
-    return pred_raw
+def denormalize(norm, limits):
+    min, max = limits
+    raw = ((norm + 1.0) / 2.0) * (max - min) + min if max != min else norm
+    return raw
 
 class TriangularActivation(nn.Module):
     """
