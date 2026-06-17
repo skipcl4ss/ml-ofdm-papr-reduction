@@ -49,9 +49,9 @@ lr_str = "dot" + str(lr).split(".")[1]
 # Data splitting (used only in saving and loading files, not in the actual C&F process)
 datasize = 100
 # datasize = 120
-train_size = 70
+train_size = 80
 # val_size = 20
-val_size = 10
+val_size = 0
 test_size = datasize - train_size - val_size
 if test_size:
     one_batch = None
@@ -79,11 +79,20 @@ NN_Mod_Re = NNSCFMapper().to(device)
 NN_Mod_Im = NNSCFMapper().to(device)
 
 # Inject the trained weights
-NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
-NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+# NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+# NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+NN_Mod_Re.load_state_dict(torch.load("./trained_models/Adam_16qam_scf_mod_re_weights_70_10_20_dot001.pth"))
+NN_Mod_Im.load_state_dict(torch.load("./trained_models/Adam_16qam_scf_mod_im_weights_70_10_20_dot001.pth"))
 
 NN_Mod_Re.eval()
 NN_Mod_Im.eval()
+
+limits = torch.load("./relev/new_method_raw_limits.pt", weights_only=False)
+
+def normalize(raw, limits):
+    min, max = limits
+    norm = 2.0 * ((raw - min) / (max - min)) - 1.0 if max != min else raw
+    return norm
 
 # ber_theory_list = []
 BER_results = {
@@ -217,8 +226,10 @@ for EbNo_dB in EbNo_range:
 
         # 1. Normalize the data and turn it to torch tensors
         # ? why tx_time_oversampled
-        tx_real, minmax_real = normalize(tx_time_oversampled.real)
-        tx_imag, minmax_imag = normalize(tx_time_oversampled.imag)
+        tx_real = normalize(tx_time_oversampled.real, limits['X_r_limits'])
+        tx_imag = normalize(tx_time_oversampled.imag, limits['X_i_limits'])
+        tx_real = torch.tensor(tx_real)
+        tx_imag = torch.tensor(tx_imag)
 
         # 2. Generate Predictions
         with torch.no_grad():
@@ -230,17 +241,8 @@ for EbNo_dB in EbNo_range:
             predicted_real = NN_Mod_Re(X_real_flat).view_as(tx_real).cpu().numpy()
             predicted_imag = NN_Mod_Im(X_imag_flat).view_as(tx_imag).cpu().numpy()
 
-            # # Pass the original input straight through
-            # predicted_real = tx_real_tensor.squeeze(0).cpu().numpy().flatten()
-            # predicted_imag = tx_imag_tensor.squeeze(0).cpu().numpy().flatten()
-            # # plt.plot(tx_real_tensor.squeeze().cpu().numpy(), label="Original Input (Normalized)")
-            # # plt.plot(predicted_real, label="NN Output (Flatlined)")
-            # # plt.legend()
-            # # plt.show()
-            # # exit()
-
-        pred_denorm_real = denormalize(predicted_real, minmax_real)
-        pred_denorm_imag = denormalize(predicted_imag, minmax_imag)
+        pred_denorm_real = denormalize(predicted_real, limits['Y_r_limits'])
+        pred_denorm_imag = denormalize(predicted_imag, limits['Y_i_limits'])
 
         predicted_complex = pred_denorm_real + 1j * pred_denorm_imag
 

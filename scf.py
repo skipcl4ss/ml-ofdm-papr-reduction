@@ -47,9 +47,9 @@ lr_str = "dot" + str(lr).split(".")[1]
 # Data splitting (used only in saving and loading files, not in the actual C&F process)
 datasize = 100
 # datasize = 120
-train_size = 70
+train_size = 80
 # val_size = 20
-val_size = 10
+val_size = 0
 test_size = datasize - train_size - val_size
 if test_size:
     one_batch = None
@@ -77,12 +77,20 @@ NN_Mod_Re = NNSCFMapper().to(device)
 NN_Mod_Im = NNSCFMapper().to(device)
 
 # Inject the trained weights
-NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
-NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_{tech}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+# NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+# NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
+NN_Mod_Re.load_state_dict(torch.load("./trained_models/Adam_16qam_scf_mod_re_weights_70_10_20_dot001.pth"))
+NN_Mod_Im.load_state_dict(torch.load("./trained_models/Adam_16qam_scf_mod_im_weights_70_10_20_dot001.pth"))
 
 NN_Mod_Re.eval()
 NN_Mod_Im.eval()
 
+limits = torch.load("./relev/new_method_raw_limits.pt", weights_only=False)
+
+def normalize(raw, limits):
+    min, max = limits
+    norm = 2.0 * ((raw - min) / (max - min)) - 1.0 if max != min else raw
+    return norm
 
 # Simulation
 # unclipped_papr, scf_papr, pred_papr, icf_papr = [], [], [], [[] for _ in range(iterations)]
@@ -161,8 +169,10 @@ middle = time.time()
 # * Compare with nnscf model
 
 # 1. Normalize the data and turn it to torch tensors
-tx_real, tx_minmax_real = normalize(tx_time[0])
-tx_imag, tx_minmax_imag = normalize(tx_time[1])
+tx_real = normalize(tx_time[0], limits['X_r_limits'])
+tx_imag = normalize(tx_time[1], limits['X_i_limits'])
+tx_real = torch.tensor(tx_real)
+tx_imag = torch.tensor(tx_imag)
 
 
 # 3. Generate Predictions (No gradients needed for testing)
@@ -175,8 +185,8 @@ with torch.no_grad():
     predicted_imag = NN_Mod_Im(X_imag_flat).view_as(tx_imag).cpu().numpy()
 
 
-pred_denorm_real = denormalize(predicted_real, tx_minmax_real)
-pred_denorm_imag = denormalize(predicted_imag, tx_minmax_imag)
+pred_denorm_real = denormalize(predicted_real, limits['Y_r_limits'])
+pred_denorm_imag = denormalize(predicted_imag, limits['Y_i_limits'])
 
 
 # 4. Reconstruct the Complex OFDM Signals
