@@ -24,8 +24,8 @@ cr = 10 ** (cr_dB / 20)
 iterations = 3
 
 # modulation scheme
-mod = "16qam"
-# mod = "qpsk"
+# mod = "16qam"
+mod = "qpsk"
 if mod == "16qam":
     M = 16
 elif mod == "qpsk":
@@ -40,7 +40,7 @@ params = f"SCF {mod.upper()} (N={N}, L={L}, CR={cr_dB}dB)"
 
 # todo: see a way to add ber to the nnscf data so that we can use it in the loss function
 
-pt_dir = "./pt_dir/"
+pt_dir = "./testraw/"
 os.makedirs(pt_dir, exist_ok=True)
 
 datasize_minus_samples_per_L_loop = 0

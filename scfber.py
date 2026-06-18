@@ -26,8 +26,8 @@ iterations = 3
 iterations_str = f"{iterations} iteration{"s" if iterations > 1 else ""}"
 
 # modulation scheme
-mod = "16qam"
-# mod = "qpsk"
+# mod = "16qam"
+mod = "qpsk"
 # edits the stops to be same as the paper, and declares M for the modem
 if mod == "16qam":
     M = 16
@@ -81,13 +81,17 @@ NN_Mod_Im = NNSCFMapper().to(device)
 # Inject the trained weights
 # NN_Mod_Re.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_re_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
 # NN_Mod_Im.load_state_dict(torch.load(os.path.join(model_dir, f"{opt}_{mod}_mod_im_weights_{train_val_test_str}_{lr_str}.pth"), weights_only=True))
-NN_Mod_Re.load_state_dict(torch.load("./trained_models/Adam_16qam_scf_mod_re_weights_70_10_20_dot001.pth"))
-NN_Mod_Im.load_state_dict(torch.load("./trained_models/Adam_16qam_scf_mod_im_weights_70_10_20_dot001.pth"))
+# NN_Mod_Re.load_state_dict(torch.load("./trained_models/Adam_16qam_scf_mod_re_weights_70_10_20_dot001.pth"))
+# NN_Mod_Im.load_state_dict(torch.load("./trained_models/Adam_16qam_scf_mod_im_weights_70_10_20_dot001.pth"))
+# NN_Mod_Re.load_state_dict(torch.load("./trained_models/Adam_qpsk_mod_re_weights_70_10_20_dot001.pth"))
+# NN_Mod_Im.load_state_dict(torch.load("./trained_models/Adam_qpsk_mod_im_weights_70_10_20_dot001.pth"))
+NN_Mod_Re.load_state_dict(torch.load("./test/Adam_qpsk_scf_mod_re_weights_70_10_20_dot001.pth"))
+NN_Mod_Im.load_state_dict(torch.load("./test/Adam_qpsk_scf_mod_im_weights_70_10_20_dot001.pth"))
 
 NN_Mod_Re.eval()
 NN_Mod_Im.eval()
 
-limits = torch.load("./relev/new_method_raw_limits.pt", weights_only=False)
+limits = torch.load(f"./relev {mod}/new_method_raw_limits.pt", weights_only=False)
 
 def normalize(raw, limits):
     min, max = limits
