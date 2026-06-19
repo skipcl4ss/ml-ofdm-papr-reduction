@@ -24,8 +24,8 @@ cr = 10 ** (cr_dB / 20)
 iterations = 3
 
 # modulation scheme
-# mod = "16qam"
-mod = "qpsk"
+mod = "16qam"
+# mod = "qpsk"
 if mod == "16qam":
     M = 16
 elif mod == "qpsk":
