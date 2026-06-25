@@ -47,9 +47,9 @@ lr_str = "dot" + str(lr).split(".")[1]
 # Data splitting (used only in saving and loading files, not in the actual C&F process)
 datasize = 100
 # datasize = 120
-train_size = 80
+train_size = 70
 # val_size = 20
-val_size = 0
+val_size = 10
 test_size = datasize - train_size - val_size
 if test_size:
     one_batch = None
@@ -101,6 +101,8 @@ def normalize(raw, limits):
 unclipped_cm, scf_cm, pred_cm, icf_cm = [], [], [], [[] for _ in range(iterations)]
 
 samples_per_L_minus_scf_icf_time = 0
+t2t1 = 0
+t5t4 = 0
 scf_time = 0
 icf_time = 0
 
@@ -125,6 +127,7 @@ for _ in range(samples_per_L):
     unclipped_cm.append(calculate_cm(x_time))
 
     t2 = time.time()
+    t2t1 += t2 - t1
     samples_per_L_minus_scf_icf_time += t2 - t1
 
     # Process SCF (1 Step replacing the 3 ICF iterations)
@@ -154,6 +157,7 @@ for _ in range(samples_per_L):
     rx_time[0].append(np.real(x_scf).astype(np.float32, copy=False))
     rx_time[1].append(np.imag(x_scf).astype(np.float32, copy=False))
     t5 = time.time()
+    t5t4 += t5 - t4
     samples_per_L_minus_scf_icf_time += t5 - t4
 
 tx_time = np.array(tx_time, dtype=np.float32)
@@ -196,6 +200,8 @@ pred_denorm_imag = denormalize(predicted_imag, limits['Y_i_limits'])
 # 4. Reconstruct the Complex OFDM Signals
 # each has shape of samples_per_L, (N * L)
 predicted_complex = pred_denorm_real + 1j * pred_denorm_imag
+
+end0 = time.time()
 
 signals["predicted"] = predicted_complex[-1]
 
@@ -266,7 +272,7 @@ print("time taken in outer samples_per_L loop:", samples_per_L_minus_scf_icf_tim
 
 labels = ['Original', 'Clipped (SCF)', f'SCF ({iterations_str})', f'Clipped ({iterations_str})', f'ICF ({iterations_str})', f'NN{tech.upper()} Predicted']
 # plot_signals(signals, labels, A)
-plot_signals2(signals, labels, A)
+plot_signals2(signals, labels, clip_threshold=A, title=f"{mod.upper()} ")
 
 signals_re = {}
 signals_im = {}
@@ -277,9 +283,14 @@ labels2 = []
 for l in labels:
     l += " (Real)"
     labels2.append(l)
-plot_signals2(signals_re, labels2, A)
+plot_signals2(signals_re, labels2, clip_threshold=A, title=f"Real Part of {mod.upper()} ")
 labels2 = []
 for l in labels:
     l += " (Imaginary)"
     labels2.append(l)
-plot_signals2(signals_im, labels2, A)
+plot_signals2(signals_im, labels2, clip_threshold=A, title=f"Imaginary Part of {mod.upper()} ")
+
+print()
+print(f"NNSCF time: {end0 - middle:.2f} seconds")
+print(f"SCF time: {scf_time:.2f} seconds")
+print(f"ICF time: {icf_time:.2f} seconds")

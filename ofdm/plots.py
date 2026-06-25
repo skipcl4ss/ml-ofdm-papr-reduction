@@ -191,7 +191,7 @@ def plot_ber(EbNo_range, val_list, title=None, label=None, M=4, save=False):
         plt.savefig(save, dpi=150)
     plt.show()
 
-def plot_constellation(symbols, mod, limit, title=None, label=None, color=None):
+def plot_constellation(symbols, mod, limit, title=None, label=None, color=None, save=False):
     plt.figure(figsize=(6, 6))
     plt.scatter(symbols.real, symbols.imag, c=color, marker='o', s=20, label=label)
     plt.title(title)
@@ -216,10 +216,12 @@ def plot_constellation(symbols, mod, limit, title=None, label=None, color=None):
     plt.yticks(ticks, labels)
 
     plt.legend(loc='lower left', ncol=2)
+    if save:
+        plt.savefig(save, dpi=150)
     plt.show()
 
 # todo: add a parameter for ylimit
-def plot_signals(signals, labels, clip_threshold=None, iterations=3):
+def plot_signals(signals, labels, clip_threshold=None, save=False):
     """
     Plot example signals in time domain.
     """
@@ -245,6 +247,8 @@ def plot_signals(signals, labels, clip_threshold=None, iterations=3):
             plt.xlabel('Time')
 
     # plt.tight_layout()
+    if save:
+        plt.savefig(save, dpi=150)
     plt.show()
 
     # s_orig = np.abs(signals['original'])
@@ -288,7 +292,7 @@ def plot_signals(signals, labels, clip_threshold=None, iterations=3):
     # plt.show()
 
 # todo: add a parameter for ylimit
-def plot_signals2(signals, labels, clip_threshold=None, iterations=3):
+def plot_signals2(signals, labels, title='', clip_threshold=None, save=False):
     top = np.max(np.abs(signals['original']))
     right = len(next(iter(signals.values())))
     if not clip_threshold:
@@ -297,6 +301,7 @@ def plot_signals2(signals, labels, clip_threshold=None, iterations=3):
     x_axis = np.arange(right)
 
     plt.figure(figsize=(10, 8))
+    plt.title(title + "Signals in Time Domain")
 
     for i, (k, v) in enumerate(signals.items()):
         plt.subplot(l, 1, i + 1)
@@ -311,6 +316,8 @@ def plot_signals2(signals, labels, clip_threshold=None, iterations=3):
             plt.xlabel('Time')
 
     # plt.tight_layout()
+    if save:
+        plt.savefig(save, dpi=150)
     plt.show()
 
     # s_orig = np.abs(signals['original'])
@@ -351,22 +358,44 @@ def plot_signals2(signals, labels, clip_threshold=None, iterations=3):
     # # plt.tight_layout()
     # plt.show()
 
-def plot_dataset_mapping(pt_file_path, title):
+def plot_dataset_mapping(pt_file_path, title, raw=False, save=False):
     # Load the normalized tensor data
+    if raw:
+        X_str = 'X_raw'
+        Y_str = 'Y_raw'
+    else:
+        X_str = 'X_norm'
+        Y_str = 'Y_norm'
+
     data = torch.load(pt_file_path, weights_only=True)
-    x_norm = data['X_norm'].cpu().numpy().flatten()
-    y_norm = data['Y_norm'].cpu().numpy().flatten()
+    x = data[X_str].cpu().numpy().flatten()
+    y = data[Y_str].cpu().numpy().flatten()
+
+    left = x.min()
+    right = x.max()
+    bottom = y.min()
+    top = y.max()
+    # print(left == -1, bottom == -1)
+    # print(right == 1, top == 1)
+
+    # print(left, right, bottom, top)
 
     # Plot Input vs Target
     plt.figure(figsize=(8, 6))
-    plt.scatter(x_norm, y_norm, alpha=0.1, s=1)
+    plt.scatter(x, y, alpha=0.1, s=1)
 
     # Draw a perfectly linear 1:1 reference line
-    plt.plot([-1, 1], [-1, 1], color='red', linestyle='--', label="Linear 1:1 Mapping")
+    # plt.plot([-1, 1], [-1, 1], color='red', linestyle='--', label="Linear 1:1 Mapping")
+    plt.plot([left, right], [bottom, top], color='red', linestyle='--', label="Linear 1:1 Mapping")
 
-    plt.title(f"Dataset Mapping: {title}\n(X_norm vs Y_norm)")
-    plt.xlabel("Input Amplitude (Normalized)")
-    plt.ylabel("Target Amplitude (Normalized)")
+    plt.xlim(left, right)
+    plt.ylim(bottom, top)
+
+    plt.title(f"Dataset Mapping: {title}\n({X_str} vs {Y_str})")
+    plt.xlabel(f"Input Amplitude ({"Raw" if raw else "Normalized"})")
+    plt.ylabel(f"Target Amplitude ({"Raw" if raw else "Normalized"})")
     plt.grid(True)
     plt.legend(loc='lower right')
+    if save:
+        plt.savefig(save, dpi=150)
     plt.show()

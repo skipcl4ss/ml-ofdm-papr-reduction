@@ -49,9 +49,9 @@ lr_str = "dot" + str(lr).split(".")[1]
 # Data splitting (used only in saving and loading files, not in the actual C&F process)
 datasize = 100
 # datasize = 120
-train_size = 80
+train_size = 70
 # val_size = 20
-val_size = 0
+val_size = 10
 test_size = datasize - train_size - val_size
 if test_size:
     one_batch = None
